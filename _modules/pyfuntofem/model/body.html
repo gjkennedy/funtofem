@@ -5,26 +5,29 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>pyfuntofem.body &#8212; FUNtoFEM .0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
-    <link rel="stylesheet" type="text/css" href="../../_static/sphinxdoc.css" />
-    <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
-    <script src="../../_static/jquery.js"></script>
-    <script src="../../_static/underscore.js"></script>
-    <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
-    <script src="../../_static/doctools.js"></script>
-    <link rel="index" title="Index" href="../../genindex.html" />
-    <link rel="search" title="Search" href="../../search.html" /> 
+    <title>pyfuntofem.model.body &#8212; FUNtoFEM .0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinxdoc.css" />
+    <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+    <script src="../../../_static/jquery.js"></script>
+    <script src="../../../_static/underscore.js"></script>
+    <script src="../../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="../../../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
   </head><body>
     <div class="related" role="navigation" aria-label="related navigation">
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
-          <a href="../../genindex.html" title="General Index"
+          <a href="../../../genindex.html" title="General Index"
              accesskey="I">index</a></li>
-        <li class="nav-item nav-item-0"><a href="../../index.html">FUNtoFEM .0 documentation</a> &#187;</li>
-          <li class="nav-item nav-item-1"><a href="../index.html" accesskey="U">Module code</a> &#187;</li>
-        <li class="nav-item nav-item-this"><a href="">pyfuntofem.body</a></li> 
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">FUNtoFEM .0 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" accesskey="U">Module code</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">pyfuntofem.model.body</a></li> 
       </ul>
     </div>  
 
@@ -33,7 +36,7 @@
         <div class="bodywrapper">
           <div class="body" role="main">
             
-  <h1>Source code for pyfuntofem.body</h1><div class="highlight"><pre>
+  <h1>Source code for pyfuntofem.model.body</h1><div class="highlight"><pre>
 <span></span><span class="ch">#!/usr/bin/env python</span>
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">This file is part of the package FUNtoFEM for coupled aeroelastic simulation</span>
@@ -57,9 +60,10 @@
 <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
-<span class="kn">from</span> <span class="nn">.base</span> <span class="kn">import</span> <span class="n">Base</span>
+<span class="kn">from</span> <span class="nn">._base</span> <span class="kn">import</span> <span class="n">Base</span>
 <span class="kn">from</span> <span class="nn">mpi4py</span> <span class="kn">import</span> <span class="n">MPI</span>
 <span class="kn">from</span> <span class="nn">funtofem</span> <span class="kn">import</span> <span class="n">TransferScheme</span>
+<span class="kn">from</span> <span class="nn">..driver.transfer_settings</span> <span class="kn">import</span> <span class="n">TransferSettings</span>
 
 <span class="k">try</span><span class="p">:</span>
     <span class="kn">from</span> <span class="nn">.hermes_transfer</span> <span class="kn">import</span> <span class="n">HermesTransfer</span>
@@ -67,11 +71,78 @@
     <span class="k">pass</span>
 
 
-<div class="viewcode-block" id="Body"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body">[docs]</a><span class="k">class</span> <span class="nc">Body</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>
+<span class="k">class</span> <span class="nc">AitkenRelaxation</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Class to define aitken relaxation settings</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">theta_init</span><span class="o">=</span><span class="mf">0.125</span><span class="p">,</span>
+        <span class="n">theta_therm_init</span><span class="o">=</span><span class="mf">0.125</span><span class="p">,</span>
+        <span class="n">theta_min</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span>
+        <span class="n">theta_max</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Construct an aitken relaxation setting object</span>
+<span class="sd">        Parmeters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        theta_init : float</span>
+<span class="sd">            initial learning rate for displacement update</span>
+<span class="sd">        theta_therm_init : float</span>
+<span class="sd">            initial learning rate for temperature update</span>
+<span class="sd">        theta_min : float</span>
+<span class="sd">            minimum learning rate</span>
+<span class="sd">        theta_max : float</span>
+<span class="sd">            maximum learning rate</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">theta_init</span> <span class="o">=</span> <span class="n">theta_init</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">theta_therm_init</span> <span class="o">=</span> <span class="n">theta_therm_init</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">theta_min</span> <span class="o">=</span> <span class="n">theta_min</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">theta_max</span> <span class="o">=</span> <span class="n">theta_max</span>
+
+
+<span class="k">class</span> <span class="nc">SimpleRelaxation</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Class to define simple exponential decay relaxation scheme</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">theta_init</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="n">theta_therm_init</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+        <span class="n">tenth_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">50</span><span class="p">,</span>
+        <span class="n">min_learning_rate</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0e-4</span><span class="p">,</span>
+        <span class="n">min_learning_rate_t</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0e-4</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">theta</span> <span class="o">=</span> <span class="n">theta_init</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">theta_t</span> <span class="o">=</span> <span class="n">theta_therm_init</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">decay_rate</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">power</span><span class="p">(</span><span class="mf">0.1</span><span class="p">,</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="n">tenth_steps</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">min_learning_rate</span> <span class="o">=</span> <span class="n">min_learning_rate</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">min_learning_rate_t</span> <span class="o">=</span> <span class="n">min_learning_rate_t</span>
+
+    <span class="k">def</span> <span class="nf">relax_displacement</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Perform the update to the learning rate for displacement transfer</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">theta</span> <span class="o">*=</span> <span class="bp">self</span><span class="o">.</span><span class="n">decay_rate</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">theta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">theta</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">min_learning_rate</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">relax_thermal</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Perform the update to the learning rate for thermal transfer</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">theta_t</span> <span class="o">*=</span> <span class="bp">self</span><span class="o">.</span><span class="n">decay_rate</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">theta_t</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">theta_t</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">min_learning_rate_t</span><span class="p">))</span>
+
+
+<div class="viewcode-block" id="Body"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body">[docs]</a><span class="k">class</span> <span class="nc">Body</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Defines a body base class for FUNtoFEM. Can be used as is or as a</span>
 <span class="sd">    parent class for bodies with shape parameterization.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">ANALYSIS_TYPES</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;aerothermal&quot;</span><span class="p">,</span> <span class="s2">&quot;aeroelastic&quot;</span><span class="p">,</span> <span class="s2">&quot;aerothermoelastic&quot;</span><span class="p">]</span>
 
     <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
@@ -82,7 +153,7 @@
         <span class="n">boundary</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
         <span class="n">fun3d</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
         <span class="n">motion_type</span><span class="o">=</span><span class="s2">&quot;deform&quot;</span><span class="p">,</span>
-        <span class="n">use_aitken_accel</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">relaxation_scheme</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
     <span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 
@@ -112,6 +183,8 @@
 <span class="sd">        &quot;&quot;&quot;</span>
 
         <span class="kn">from</span> <span class="nn">.variable</span> <span class="kn">import</span> <span class="n">Variable</span> <span class="k">as</span> <span class="n">dv</span>
+
+        <span class="k">assert</span> <span class="n">analysis_type</span> <span class="ow">in</span> <span class="n">Body</span><span class="o">.</span><span class="n">ANALYSIS_TYPES</span>
 
         <span class="nb">super</span><span class="p">(</span><span class="n">Body</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="nb">id</span><span class="p">,</span> <span class="n">group</span><span class="p">)</span>
 
@@ -178,18 +251,18 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">struct_id</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">aero_id</span> <span class="o">=</span> <span class="kc">None</span>
 
+        <span class="c1"># relaxation scheme object</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">relaxation_scheme</span> <span class="o">=</span> <span class="n">relaxation_scheme</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">use_aitken_accel</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">relaxation_scheme</span><span class="p">,</span> <span class="n">AitkenRelaxation</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">use_simple_accel</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">relaxation_scheme</span><span class="p">,</span> <span class="n">SimpleRelaxation</span><span class="p">)</span>
+
         <span class="c1"># Aitken acceleration settings</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">use_aitken_accel</span> <span class="o">=</span> <span class="n">use_aitken_accel</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">theta_init</span> <span class="o">=</span> <span class="mf">0.125</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">theta_therm_init</span> <span class="o">=</span> <span class="mf">0.125</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">theta_min</span> <span class="o">=</span> <span class="mf">0.01</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">theta_max</span> <span class="o">=</span> <span class="mf">1.0</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">aitken_init</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">aitken_vec</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">aitken_therm_vec</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">up_prev</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">therm_up_prev</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">aitken_init</span> <span class="o">=</span> <span class="kc">False</span>
 
         <span class="c1"># forward variables</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">struct_disps</span> <span class="o">=</span> <span class="p">{}</span>
@@ -208,7 +281,94 @@
 
         <span class="k">return</span>
 
-<div class="viewcode-block" id="Body.initialize_struct_nodes"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.initialize_struct_nodes">[docs]</a>    <span class="k">def</span> <span class="nf">initialize_struct_nodes</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">struct_X</span><span class="p">,</span> <span class="n">struct_id</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.aeroelastic"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.aeroelastic">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">aeroelastic</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span>
+        <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">boundary</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="n">use_fun3d</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">motion_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;deform&quot;</span><span class="p">,</span>
+        <span class="n">relaxation_scheme</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        class method to create a body object</span>
+<span class="sd">        recommendation: set name, boundary here and use method cascades for motion_type, relaxation_scheme</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">analysis_type</span><span class="o">=</span><span class="s2">&quot;aeroelastic&quot;</span><span class="p">,</span>
+            <span class="n">boundary</span><span class="o">=</span><span class="n">boundary</span><span class="p">,</span>
+            <span class="n">fun3d</span><span class="o">=</span><span class="n">use_fun3d</span><span class="p">,</span>
+            <span class="n">motion_type</span><span class="o">=</span><span class="n">motion_type</span><span class="p">,</span>
+            <span class="n">relaxation_scheme</span><span class="o">=</span><span class="n">relaxation_scheme</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="Body.aerothermal"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.aerothermal">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">aerothermal</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span>
+        <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">boundary</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="n">use_fun3d</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">motion_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;deform&quot;</span><span class="p">,</span>
+        <span class="n">relaxation_scheme</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        class method to create a body object</span>
+<span class="sd">        recommendation: set name, boundary here and use method cascades for motion_type, relaxation_scheme</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">analysis_type</span><span class="o">=</span><span class="s2">&quot;aerothermal&quot;</span><span class="p">,</span>
+            <span class="n">boundary</span><span class="o">=</span><span class="n">boundary</span><span class="p">,</span>
+            <span class="n">fun3d</span><span class="o">=</span><span class="n">use_fun3d</span><span class="p">,</span>
+            <span class="n">motion_type</span><span class="o">=</span><span class="n">motion_type</span><span class="p">,</span>
+            <span class="n">relaxation_scheme</span><span class="o">=</span><span class="n">relaxation_scheme</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="Body.aerothermoelastic"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.aerothermoelastic">[docs]</a>    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">aerothermoelastic</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span>
+        <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">boundary</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="n">use_fun3d</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">motion_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;deform&quot;</span><span class="p">,</span>
+        <span class="n">relaxation_scheme</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        class method to create a body object</span>
+<span class="sd">        recommendation: set name, boundary here and use method cascades for motion_type, relaxation_scheme</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">analysis_type</span><span class="o">=</span><span class="s2">&quot;aerothermoelastic&quot;</span><span class="p">,</span>
+            <span class="n">boundary</span><span class="o">=</span><span class="n">boundary</span><span class="p">,</span>
+            <span class="n">fun3d</span><span class="o">=</span><span class="n">use_fun3d</span><span class="p">,</span>
+            <span class="n">motion_type</span><span class="o">=</span><span class="n">motion_type</span><span class="p">,</span>
+            <span class="n">relaxation_scheme</span><span class="o">=</span><span class="n">relaxation_scheme</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="Body.motion_type"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.motion_type">[docs]</a>    <span class="k">def</span> <span class="nf">motion_type</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">new_motion_type</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        set the motion type in a method cascade</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">motion_type</span> <span class="o">=</span> <span class="n">new_motion_type</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="Body.relaxation"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.relaxation">[docs]</a>    <span class="k">def</span> <span class="nf">relaxation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">new_relaxation_scheme</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        set the relaxation scheme in a method cascade</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">relaxation_scheme</span> <span class="o">=</span> <span class="n">new_relaxation_scheme</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="Body.register_to"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.register_to">[docs]</a>    <span class="k">def</span> <span class="nf">register_to</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">funtofem_model</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        add this body to the funtofem model in a method cascade</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">funtofem_model</span><span class="o">.</span><span class="n">add_body</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+<div class="viewcode-block" id="Body.initialize_struct_nodes"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.initialize_struct_nodes">[docs]</a>    <span class="k">def</span> <span class="nf">initialize_struct_nodes</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">struct_X</span><span class="p">,</span> <span class="n">struct_id</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Initialize the structural mesh on any processors that have an instance</span>
 <span class="sd">        of the structural solver.</span>
@@ -231,28 +391,28 @@
 
         <span class="k">return</span></div>
 
-<div class="viewcode-block" id="Body.get_struct_nodes"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.get_struct_nodes">[docs]</a>    <span class="k">def</span> <span class="nf">get_struct_nodes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.get_struct_nodes"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.get_struct_nodes">[docs]</a>    <span class="k">def</span> <span class="nf">get_struct_nodes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Get the structural node locations associated with this body</span>
 <span class="sd">        &quot;&quot;&quot;</span>
 
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">struct_X</span></div>
 
-<div class="viewcode-block" id="Body.get_num_struct_nodes"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.get_num_struct_nodes">[docs]</a>    <span class="k">def</span> <span class="nf">get_num_struct_nodes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.get_num_struct_nodes"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.get_num_struct_nodes">[docs]</a>    <span class="k">def</span> <span class="nf">get_num_struct_nodes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Get the number of aerodynamic surface nodes</span>
 <span class="sd">        &quot;&quot;&quot;</span>
 
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">struct_nnodes</span></div>
 
-<div class="viewcode-block" id="Body.get_struct_node_ids"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.get_struct_node_ids">[docs]</a>    <span class="k">def</span> <span class="nf">get_struct_node_ids</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.get_struct_node_ids"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.get_struct_node_ids">[docs]</a>    <span class="k">def</span> <span class="nf">get_struct_node_ids</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Get the structural node ids</span>
 <span class="sd">        &quot;&quot;&quot;</span>
 
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">struct_id</span></div>
 
-<div class="viewcode-block" id="Body.initialize_aero_nodes"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.initialize_aero_nodes">[docs]</a>    <span class="k">def</span> <span class="nf">initialize_aero_nodes</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">aero_X</span><span class="p">,</span> <span class="n">aero_id</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.initialize_aero_nodes"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.initialize_aero_nodes">[docs]</a>    <span class="k">def</span> <span class="nf">initialize_aero_nodes</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">aero_X</span><span class="p">,</span> <span class="n">aero_id</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Initialize the aerodynamic surface mesh on any processors that have an</span>
 <span class="sd">        instance of the aerodynamic solver</span>
@@ -275,28 +435,28 @@
 
         <span class="k">return</span></div>
 
-<div class="viewcode-block" id="Body.get_aero_nodes"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.get_aero_nodes">[docs]</a>    <span class="k">def</span> <span class="nf">get_aero_nodes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.get_aero_nodes"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.get_aero_nodes">[docs]</a>    <span class="k">def</span> <span class="nf">get_aero_nodes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Get the aerodynamic node locations associated with this body</span>
 <span class="sd">        &quot;&quot;&quot;</span>
 
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">aero_X</span></div>
 
-<div class="viewcode-block" id="Body.get_num_aero_nodes"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.get_num_aero_nodes">[docs]</a>    <span class="k">def</span> <span class="nf">get_num_aero_nodes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.get_num_aero_nodes"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.get_num_aero_nodes">[docs]</a>    <span class="k">def</span> <span class="nf">get_num_aero_nodes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Get the number of aerodynamic surface nodes</span>
 <span class="sd">        &quot;&quot;&quot;</span>
 
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">aero_nnodes</span></div>
 
-<div class="viewcode-block" id="Body.get_aero_node_ids"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.get_aero_node_ids">[docs]</a>    <span class="k">def</span> <span class="nf">get_aero_node_ids</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.get_aero_node_ids"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.get_aero_node_ids">[docs]</a>    <span class="k">def</span> <span class="nf">get_aero_node_ids</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Get the aerodynamic node ids</span>
 <span class="sd">        &quot;&quot;&quot;</span>
 
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">aero_id</span></div>
 
-<div class="viewcode-block" id="Body.verify_analysis_type"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.verify_analysis_type">[docs]</a>    <span class="k">def</span> <span class="nf">verify_analysis_type</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">analysis_type</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.verify_analysis_type"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.verify_analysis_type">[docs]</a>    <span class="k">def</span> <span class="nf">verify_analysis_type</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">analysis_type</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot; &quot;</span>
 <span class="sd">        Input verification for analysis type when initializing a body.</span>
 
@@ -306,19 +466,19 @@
 <span class="sd">            type of analysis</span>
 <span class="sd">        &quot;&quot;&quot;</span>
 
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">analysis_type</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;aerothermal&quot;</span><span class="p">,</span> <span class="s2">&quot;aerothermoelastic&quot;</span><span class="p">,</span> <span class="s2">&quot;aeroelastic&quot;</span><span class="p">]:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">analysis_type</span> <span class="ow">in</span> <span class="n">Body</span><span class="o">.</span><span class="n">ANALYSIS_TYPES</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;analysis_type specified is not recognized as valid&quot;</span><span class="p">)</span>
 
         <span class="k">return</span></div>
 
-<div class="viewcode-block" id="Body.initialize_transfer"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.initialize_transfer">[docs]</a>    <span class="k">def</span> <span class="nf">initialize_transfer</span><span class="p">(</span>
+<div class="viewcode-block" id="Body.initialize_transfer"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.initialize_transfer">[docs]</a>    <span class="k">def</span> <span class="nf">initialize_transfer</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">comm</span><span class="p">,</span>
         <span class="n">struct_comm</span><span class="p">,</span>
         <span class="n">struct_root</span><span class="p">,</span>
         <span class="n">aero_comm</span><span class="p">,</span>
         <span class="n">aero_root</span><span class="p">,</span>
-        <span class="n">transfer_options</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">transfer_settings</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
     <span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Initialize the load and displacement and/or thermal transfer scheme for this body</span>
@@ -327,52 +487,53 @@
 <span class="sd">        ----------</span>
 <span class="sd">        comm: MPI.comm</span>
 <span class="sd">            MPI communicator</span>
-<span class="sd">        transfer_options: dictionary or list of dictionaries</span>
+<span class="sd">        transfer_settings: TransferSettings</span>
 <span class="sd">            options for the load and displacement transfer scheme for the bodies</span>
 <span class="sd">        &quot;&quot;&quot;</span>
 
         <span class="c1"># If the user did not specify a transfer scheme default to MELD</span>
-        <span class="k">if</span> <span class="n">transfer_options</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">transfer_options</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;scheme&quot;</span><span class="p">:</span> <span class="s2">&quot;meld&quot;</span><span class="p">,</span> <span class="s2">&quot;isym&quot;</span><span class="p">:</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;beta&quot;</span><span class="p">:</span> <span class="mf">0.5</span><span class="p">,</span> <span class="s2">&quot;npts&quot;</span><span class="p">:</span> <span class="mi">200</span><span class="p">}</span>
+        <span class="k">if</span> <span class="n">transfer_settings</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">transfer_settings</span> <span class="o">=</span> <span class="n">TransferSettings</span><span class="p">()</span>
 
         <span class="c1"># Initialize the transfer and thermal transfer objects to None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">transfer</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">thermal_transfer</span> <span class="o">=</span> <span class="kc">None</span>
 
-        <span class="n">body_analysis_type</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">analysis_type</span>
-        <span class="k">if</span> <span class="s2">&quot;analysis_type&quot;</span> <span class="ow">in</span> <span class="n">transfer_options</span><span class="p">:</span>
-            <span class="n">body_analysis_type</span> <span class="o">=</span> <span class="n">transfer_options</span><span class="p">[</span><span class="s2">&quot;analysis_type&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
-
         <span class="c1"># Verify analysis type is valid</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">verify_analysis_type</span><span class="p">(</span><span class="n">body_analysis_type</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">verify_analysis_type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">analysis_type</span><span class="p">)</span>
+
+        <span class="n">elastic_analyses</span> <span class="o">=</span> <span class="p">[</span><span class="n">_</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">Body</span><span class="o">.</span><span class="n">ANALYSIS_TYPES</span> <span class="k">if</span> <span class="s2">&quot;elastic&quot;</span> <span class="ow">in</span> <span class="n">_</span><span class="p">]</span>
+        <span class="n">thermal_analyses</span> <span class="o">=</span> <span class="p">[</span><span class="n">_</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">Body</span><span class="o">.</span><span class="n">ANALYSIS_TYPES</span> <span class="k">if</span> <span class="s2">&quot;therm&quot;</span> <span class="ow">in</span> <span class="n">_</span><span class="p">]</span>
 
         <span class="c1"># Set up the transfer schemes based on the type of analysis set for this body</span>
-        <span class="k">if</span> <span class="p">(</span>
-            <span class="n">body_analysis_type</span> <span class="o">==</span> <span class="s2">&quot;aeroelastic&quot;</span>
-            <span class="ow">or</span> <span class="n">body_analysis_type</span> <span class="o">==</span> <span class="s2">&quot;aerothermoelastic&quot;</span>
-        <span class="p">):</span>
-
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">analysis_type</span> <span class="ow">in</span> <span class="n">elastic_analyses</span><span class="p">:</span>
             <span class="c1"># Set up the load and displacement transfer schemes</span>
-            <span class="k">if</span> <span class="n">transfer_options</span><span class="p">[</span><span class="s2">&quot;scheme&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;hermes&quot;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">transfer_settings</span><span class="o">.</span><span class="n">elastic_scheme</span> <span class="o">==</span> <span class="s2">&quot;hermes&quot;</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">transfer</span> <span class="o">=</span> <span class="n">HermesTransfer</span><span class="p">(</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">comm</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">struct_comm</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">aero_comm</span>
                 <span class="p">)</span>
 
-            <span class="k">elif</span> <span class="n">transfer_options</span><span class="p">[</span><span class="s2">&quot;scheme&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;rbf&quot;</span><span class="p">:</span>
+            <span class="k">elif</span> <span class="n">transfer_settings</span><span class="o">.</span><span class="n">elastic_scheme</span> <span class="o">==</span> <span class="s2">&quot;rbf&quot;</span><span class="p">:</span>
                 <span class="n">basis</span> <span class="o">=</span> <span class="n">TransferScheme</span><span class="o">.</span><span class="n">PY_THIN_PLATE_SPLINE</span>
 
-                <span class="k">if</span> <span class="s2">&quot;basis function&quot;</span> <span class="ow">in</span> <span class="n">transfer_options</span><span class="p">:</span>
+                <span class="k">if</span> <span class="s2">&quot;basis function&quot;</span> <span class="ow">in</span> <span class="n">transfer_settings</span><span class="o">.</span><span class="n">options</span><span class="p">:</span>
                     <span class="k">if</span> <span class="p">(</span>
-                        <span class="n">transfer_options</span><span class="p">[</span><span class="s2">&quot;basis function&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+                        <span class="n">transfer_settings</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s2">&quot;basis function&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
                         <span class="o">==</span> <span class="s2">&quot;thin plate spline&quot;</span>
                     <span class="p">):</span>
                         <span class="n">basis</span> <span class="o">=</span> <span class="n">TransferScheme</span><span class="o">.</span><span class="n">PY_THIN_PLATE_SPLINE</span>
-                    <span class="k">elif</span> <span class="n">transfer_options</span><span class="p">[</span><span class="s2">&quot;basis function&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;gaussian&quot;</span><span class="p">:</span>
+                    <span class="k">elif</span> <span class="p">(</span>
+                        <span class="n">transfer_settings</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s2">&quot;basis function&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+                        <span class="o">==</span> <span class="s2">&quot;gaussian&quot;</span>
+                    <span class="p">):</span>
                         <span class="n">basis</span> <span class="o">=</span> <span class="n">TransferScheme</span><span class="o">.</span><span class="n">PY_GAUSSIAN</span>
-                    <span class="k">elif</span> <span class="n">transfer_options</span><span class="p">[</span><span class="s2">&quot;basis function&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;multiquadric&quot;</span><span class="p">:</span>
+                    <span class="k">elif</span> <span class="p">(</span>
+                        <span class="n">transfer_settings</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s2">&quot;basis function&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+                        <span class="o">==</span> <span class="s2">&quot;multiquadric&quot;</span>
+                    <span class="p">):</span>
                         <span class="n">basis</span> <span class="o">=</span> <span class="n">TransferScheme</span><span class="o">.</span><span class="n">PY_MULTIQUADRIC</span>
                     <span class="k">elif</span> <span class="p">(</span>
-                        <span class="n">transfer_options</span><span class="p">[</span><span class="s2">&quot;basis function&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+                        <span class="n">transfer_settings</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s2">&quot;basis function&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
                         <span class="o">==</span> <span class="s2">&quot;inverse multiquadric&quot;</span>
                     <span class="p">):</span>
                         <span class="n">basis</span> <span class="o">=</span> <span class="n">TransferScheme</span><span class="o">.</span><span class="n">PY_INVERSE_MULTIQUADRIC</span>
@@ -384,60 +545,31 @@
                     <span class="n">comm</span><span class="p">,</span> <span class="n">struct_comm</span><span class="p">,</span> <span class="n">struct_root</span><span class="p">,</span> <span class="n">aero_comm</span><span class="p">,</span> <span class="n">aero_root</span><span class="p">,</span> <span class="n">basis</span><span class="p">,</span> <span class="mi">1</span>
                 <span class="p">)</span>
 
-            <span class="k">elif</span> <span class="n">transfer_options</span><span class="p">[</span><span class="s2">&quot;scheme&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;meld&quot;</span><span class="p">:</span>
-                <span class="c1"># defaults</span>
-                <span class="n">isym</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>  <span class="c1"># No symmetry</span>
-                <span class="n">beta</span> <span class="o">=</span> <span class="mf">0.5</span>  <span class="c1"># Decay factor</span>
-                <span class="n">num_nearest</span> <span class="o">=</span> <span class="mi">200</span>  <span class="c1"># Number of nearest neighbours</span>
-
-                <span class="k">if</span> <span class="s2">&quot;isym&quot;</span> <span class="ow">in</span> <span class="n">transfer_options</span><span class="p">:</span>
-                    <span class="n">isym</span> <span class="o">=</span> <span class="n">transfer_options</span><span class="p">[</span><span class="s2">&quot;isym&quot;</span><span class="p">]</span>
-                <span class="k">if</span> <span class="s2">&quot;beta&quot;</span> <span class="ow">in</span> <span class="n">transfer_options</span><span class="p">:</span>
-                    <span class="n">beta</span> <span class="o">=</span> <span class="n">transfer_options</span><span class="p">[</span><span class="s2">&quot;beta&quot;</span><span class="p">]</span>
-                <span class="k">if</span> <span class="s2">&quot;npts&quot;</span> <span class="ow">in</span> <span class="n">transfer_options</span><span class="p">:</span>
-                    <span class="n">num_nearest</span> <span class="o">=</span> <span class="n">transfer_options</span><span class="p">[</span><span class="s2">&quot;npts&quot;</span><span class="p">]</span>
-
+            <span class="k">elif</span> <span class="n">transfer_settings</span><span class="o">.</span><span class="n">elastic_scheme</span> <span class="o">==</span> <span class="s2">&quot;meld&quot;</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">transfer</span> <span class="o">=</span> <span class="n">TransferScheme</span><span class="o">.</span><span class="n">pyMELD</span><span class="p">(</span>
                     <span class="n">comm</span><span class="p">,</span>
                     <span class="n">struct_comm</span><span class="p">,</span>
                     <span class="n">struct_root</span><span class="p">,</span>
                     <span class="n">aero_comm</span><span class="p">,</span>
                     <span class="n">aero_root</span><span class="p">,</span>
-                    <span class="n">isym</span><span class="p">,</span>
-                    <span class="n">num_nearest</span><span class="p">,</span>
-                    <span class="n">beta</span><span class="p">,</span>
+                    <span class="n">transfer_settings</span><span class="o">.</span><span class="n">isym</span><span class="p">,</span>
+                    <span class="n">transfer_settings</span><span class="o">.</span><span class="n">npts</span><span class="p">,</span>
+                    <span class="n">transfer_settings</span><span class="o">.</span><span class="n">beta</span><span class="p">,</span>
                 <span class="p">)</span>
 
-            <span class="k">elif</span> <span class="n">transfer_options</span><span class="p">[</span><span class="s2">&quot;scheme&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;linearized meld&quot;</span><span class="p">:</span>
-                <span class="c1"># defaults</span>
-                <span class="n">isym</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
-                <span class="n">beta</span> <span class="o">=</span> <span class="mf">0.5</span>
-                <span class="n">num_nearest</span> <span class="o">=</span> <span class="mi">200</span>
-
-                <span class="k">if</span> <span class="s2">&quot;isym&quot;</span> <span class="ow">in</span> <span class="n">transfer_options</span><span class="p">:</span>
-                    <span class="n">isym</span> <span class="o">=</span> <span class="n">transfer_options</span><span class="p">[</span><span class="s2">&quot;isym&quot;</span><span class="p">]</span>
-                <span class="k">if</span> <span class="s2">&quot;beta&quot;</span> <span class="ow">in</span> <span class="n">transfer_options</span><span class="p">:</span>
-                    <span class="n">beta</span> <span class="o">=</span> <span class="n">transfer_options</span><span class="p">[</span><span class="s2">&quot;beta&quot;</span><span class="p">]</span>
-                <span class="k">if</span> <span class="s2">&quot;npts&quot;</span> <span class="ow">in</span> <span class="n">transfer_options</span><span class="p">:</span>
-                    <span class="n">num_nearest</span> <span class="o">=</span> <span class="n">transfer_options</span><span class="p">[</span><span class="s2">&quot;npts&quot;</span><span class="p">]</span>
-
+            <span class="k">elif</span> <span class="n">transfer_settings</span><span class="o">.</span><span class="n">elastic_scheme</span> <span class="o">==</span> <span class="s2">&quot;linearized meld&quot;</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">transfer</span> <span class="o">=</span> <span class="n">TransferScheme</span><span class="o">.</span><span class="n">pyLinearizedMELD</span><span class="p">(</span>
                     <span class="n">comm</span><span class="p">,</span>
                     <span class="n">struct_comm</span><span class="p">,</span>
                     <span class="n">struct_root</span><span class="p">,</span>
                     <span class="n">aero_comm</span><span class="p">,</span>
                     <span class="n">aero_root</span><span class="p">,</span>
-                    <span class="n">isym</span><span class="p">,</span>
-                    <span class="n">num_nearest</span><span class="p">,</span>
-                    <span class="n">beta</span><span class="p">,</span>
+                    <span class="n">transfer_settings</span><span class="o">.</span><span class="n">isym</span><span class="p">,</span>
+                    <span class="n">transfer_settings</span><span class="o">.</span><span class="n">npts</span><span class="p">,</span>
+                    <span class="n">transfer_settings</span><span class="o">.</span><span class="n">beta</span><span class="p">,</span>
                 <span class="p">)</span>
 
-            <span class="k">elif</span> <span class="n">transfer_options</span><span class="p">[</span><span class="s2">&quot;scheme&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;beam&quot;</span><span class="p">:</span>
-                <span class="n">conn</span> <span class="o">=</span> <span class="n">transfer_options</span><span class="p">[</span><span class="s2">&quot;conn&quot;</span><span class="p">]</span>
-                <span class="n">nelems</span> <span class="o">=</span> <span class="n">transfer_options</span><span class="p">[</span><span class="s2">&quot;nelems&quot;</span><span class="p">]</span>
-                <span class="n">order</span> <span class="o">=</span> <span class="n">transfer_options</span><span class="p">[</span><span class="s2">&quot;order&quot;</span><span class="p">]</span>
-                <span class="n">ndof</span> <span class="o">=</span> <span class="n">transfer_options</span><span class="p">[</span><span class="s2">&quot;ndof&quot;</span><span class="p">]</span>
-
+            <span class="k">elif</span> <span class="n">transfer_settings</span><span class="o">.</span><span class="n">elastic_scheme</span> <span class="o">==</span> <span class="s2">&quot;beam&quot;</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">xfer_ndof</span> <span class="o">=</span> <span class="n">ndof</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">transfer</span> <span class="o">=</span> <span class="n">TransferScheme</span><span class="o">.</span><span class="n">pyBeamTransfer</span><span class="p">(</span>
                     <span class="n">comm</span><span class="p">,</span>
@@ -445,44 +577,29 @@
                     <span class="n">struct_root</span><span class="p">,</span>
                     <span class="n">aero_comm</span><span class="p">,</span>
                     <span class="n">aero_root</span><span class="p">,</span>
-                    <span class="n">conn</span><span class="p">,</span>
-                    <span class="n">nelems</span><span class="p">,</span>
-                    <span class="n">order</span><span class="p">,</span>
-                    <span class="n">ndof</span><span class="p">,</span>
+                    <span class="n">transfer_settings</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s2">&quot;conn&quot;</span><span class="p">],</span>
+                    <span class="n">transfer_settings</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s2">&quot;nelems&quot;</span><span class="p">],</span>
+                    <span class="n">transfer_settings</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s2">&quot;order&quot;</span><span class="p">],</span>
+                    <span class="n">transfer_settings</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s2">&quot;ndof&quot;</span><span class="p">],</span>
                 <span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Error: Unknown transfer scheme for body&quot;</span><span class="p">)</span>
                 <span class="n">quit</span><span class="p">()</span>
 
         <span class="c1"># Set up the transfer schemes based on the type of analysis set for this body</span>
-        <span class="k">if</span> <span class="p">(</span>
-            <span class="n">body_analysis_type</span> <span class="o">==</span> <span class="s2">&quot;aerothermal&quot;</span>
-            <span class="ow">or</span> <span class="n">body_analysis_type</span> <span class="o">==</span> <span class="s2">&quot;aerothermoelastic&quot;</span>
-        <span class="p">):</span>
-            <span class="c1"># Set up the load and displacement transfer schemes</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">analysis_type</span> <span class="ow">in</span> <span class="n">thermal_analyses</span><span class="p">:</span>
+            <span class="c1"># Set up the thermal transfer schemes</span>
 
-            <span class="k">if</span> <span class="n">transfer_options</span><span class="p">[</span><span class="s2">&quot;thermal_scheme&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;meld&quot;</span><span class="p">:</span>
-                <span class="c1"># defaults</span>
-                <span class="n">isym</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
-                <span class="n">beta</span> <span class="o">=</span> <span class="mf">0.5</span>
-                <span class="n">num_nearest</span> <span class="o">=</span> <span class="mi">200</span>
-
-                <span class="k">if</span> <span class="s2">&quot;isym&quot;</span> <span class="ow">in</span> <span class="n">transfer_options</span><span class="p">:</span>
-                    <span class="n">isym</span> <span class="o">=</span> <span class="n">transfer_options</span><span class="p">[</span><span class="s2">&quot;isym&quot;</span><span class="p">]</span>
-                <span class="k">if</span> <span class="s2">&quot;beta&quot;</span> <span class="ow">in</span> <span class="n">transfer_options</span><span class="p">:</span>
-                    <span class="n">beta</span> <span class="o">=</span> <span class="n">transfer_options</span><span class="p">[</span><span class="s2">&quot;beta&quot;</span><span class="p">]</span>
-                <span class="k">if</span> <span class="s2">&quot;npts&quot;</span> <span class="ow">in</span> <span class="n">transfer_options</span><span class="p">:</span>
-                    <span class="n">num_nearest</span> <span class="o">=</span> <span class="n">transfer_options</span><span class="p">[</span><span class="s2">&quot;npts&quot;</span><span class="p">]</span>
-
+            <span class="k">if</span> <span class="n">transfer_settings</span><span class="o">.</span><span class="n">thermal_scheme</span> <span class="o">==</span> <span class="s2">&quot;meld&quot;</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">thermal_transfer</span> <span class="o">=</span> <span class="n">TransferScheme</span><span class="o">.</span><span class="n">pyMELDThermal</span><span class="p">(</span>
                     <span class="n">comm</span><span class="p">,</span>
                     <span class="n">struct_comm</span><span class="p">,</span>
                     <span class="n">struct_root</span><span class="p">,</span>
                     <span class="n">aero_comm</span><span class="p">,</span>
                     <span class="n">aero_root</span><span class="p">,</span>
-                    <span class="n">isym</span><span class="p">,</span>
-                    <span class="n">num_nearest</span><span class="p">,</span>
-                    <span class="n">beta</span><span class="p">,</span>
+                    <span class="n">transfer_settings</span><span class="o">.</span><span class="n">isym</span><span class="p">,</span>
+                    <span class="n">transfer_settings</span><span class="o">.</span><span class="n">thermal_npts</span><span class="p">,</span>
+                    <span class="n">transfer_settings</span><span class="o">.</span><span class="n">thermal_beta</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Error: Unknown thermal transfer scheme for body&quot;</span><span class="p">)</span>
@@ -501,7 +618,7 @@
 
         <span class="k">return</span></div>
 
-<div class="viewcode-block" id="Body.update_transfer"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.update_transfer">[docs]</a>    <span class="k">def</span> <span class="nf">update_transfer</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.update_transfer"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.update_transfer">[docs]</a>    <span class="k">def</span> <span class="nf">update_transfer</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Update the positions of the nodes in transfer schemes</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -516,7 +633,7 @@
 
         <span class="k">return</span></div>
 
-<div class="viewcode-block" id="Body.set_id"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.set_id">[docs]</a>    <span class="k">def</span> <span class="nf">set_id</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">id</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.set_id"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.set_id">[docs]</a>    <span class="k">def</span> <span class="nf">set_id</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">id</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        **[model call]**</span>
 <span class="sd">        Update the id number of the body or scenario</span>
@@ -532,7 +649,7 @@
             <span class="k">for</span> <span class="n">var</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">variables</span><span class="p">[</span><span class="n">vartype</span><span class="p">]:</span>
                 <span class="n">var</span><span class="o">.</span><span class="n">body</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">id</span></div>
 
-<div class="viewcode-block" id="Body.add_variable"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.add_variable">[docs]</a>    <span class="k">def</span> <span class="nf">add_variable</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vartype</span><span class="p">,</span> <span class="n">var</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.add_variable"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.add_variable">[docs]</a>    <span class="k">def</span> <span class="nf">add_variable</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">vartype</span><span class="p">,</span> <span class="n">var</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Add a new variable to the body&#39;s variable dictionary.</span>
 
@@ -547,7 +664,7 @@
 
         <span class="nb">super</span><span class="p">(</span><span class="n">Body</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">add_variable</span><span class="p">(</span><span class="n">vartype</span><span class="p">,</span> <span class="n">var</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="Body.initialize_variables"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.initialize_variables">[docs]</a>    <span class="k">def</span> <span class="nf">initialize_variables</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.initialize_variables"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.initialize_variables">[docs]</a>    <span class="k">def</span> <span class="nf">initialize_variables</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Initialize the variables each time we run an analysis.</span>
 
@@ -559,6 +676,7 @@
 
         <span class="c1"># We re-initialize aitken acceleration every time</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">aitken_is_initialized</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">aitken_adj_is_initialized</span> <span class="o">=</span> <span class="kc">False</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">transfer</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">ns</span> <span class="o">=</span> <span class="mi">3</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">struct_nnodes</span>
@@ -610,7 +728,7 @@
 
         <span class="k">return</span></div>
 
-<div class="viewcode-block" id="Body.initialize_adjoint_variables"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.initialize_adjoint_variables">[docs]</a>    <span class="k">def</span> <span class="nf">initialize_adjoint_variables</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.initialize_adjoint_variables"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.initialize_adjoint_variables">[docs]</a>    <span class="k">def</span> <span class="nf">initialize_adjoint_variables</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Initialize the adjoint variables for the body.</span>
 
@@ -665,7 +783,7 @@
 
         <span class="k">return</span></div>
 
-<div class="viewcode-block" id="Body.get_aero_disps"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.get_aero_disps">[docs]</a>    <span class="k">def</span> <span class="nf">get_aero_disps</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.get_aero_disps"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.get_aero_disps">[docs]</a>    <span class="k">def</span> <span class="nf">get_aero_disps</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Get the displacements on the aerodynamic surface for the given scenario.</span>
 
@@ -684,7 +802,7 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">None</span></div>
 
-<div class="viewcode-block" id="Body.get_struct_disps"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.get_struct_disps">[docs]</a>    <span class="k">def</span> <span class="nf">get_struct_disps</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.get_struct_disps"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.get_struct_disps">[docs]</a>    <span class="k">def</span> <span class="nf">get_struct_disps</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Get the displacements on the structure for the given scenario.</span>
 
@@ -703,7 +821,7 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">None</span></div>
 
-<div class="viewcode-block" id="Body.get_aero_loads"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.get_aero_loads">[docs]</a>    <span class="k">def</span> <span class="nf">get_aero_loads</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.get_aero_loads"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.get_aero_loads">[docs]</a>    <span class="k">def</span> <span class="nf">get_aero_loads</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Get the loads on the aerodynamic surface for the given scenario.</span>
 
@@ -722,7 +840,7 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">None</span></div>
 
-<div class="viewcode-block" id="Body.get_struct_loads"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.get_struct_loads">[docs]</a>    <span class="k">def</span> <span class="nf">get_struct_loads</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.get_struct_loads"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.get_struct_loads">[docs]</a>    <span class="k">def</span> <span class="nf">get_struct_loads</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Get the loads on the structure for the given scenario.</span>
 
@@ -741,7 +859,7 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">None</span></div>
 
-<div class="viewcode-block" id="Body.get_aero_temps"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.get_aero_temps">[docs]</a>    <span class="k">def</span> <span class="nf">get_aero_temps</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.get_aero_temps"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.get_aero_temps">[docs]</a>    <span class="k">def</span> <span class="nf">get_aero_temps</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Get the temperatures on the aerodynamic surface for the given scenario.</span>
 
@@ -760,7 +878,7 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">None</span></div>
 
-<div class="viewcode-block" id="Body.get_aero_heat_flux"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.get_aero_heat_flux">[docs]</a>    <span class="k">def</span> <span class="nf">get_aero_heat_flux</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.get_aero_heat_flux"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.get_aero_heat_flux">[docs]</a>    <span class="k">def</span> <span class="nf">get_aero_heat_flux</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Get the heat flux on the aerodynamic surface for the given scenario.</span>
 
@@ -779,7 +897,7 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">None</span></div>
 
-<div class="viewcode-block" id="Body.get_struct_temps"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.get_struct_temps">[docs]</a>    <span class="k">def</span> <span class="nf">get_struct_temps</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.get_struct_temps"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.get_struct_temps">[docs]</a>    <span class="k">def</span> <span class="nf">get_struct_temps</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Get the temperatures on the structure for the given scenario.</span>
 
@@ -798,7 +916,7 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">None</span></div>
 
-<div class="viewcode-block" id="Body.get_struct_heat_flux"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.get_struct_heat_flux">[docs]</a>    <span class="k">def</span> <span class="nf">get_struct_heat_flux</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.get_struct_heat_flux"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.get_struct_heat_flux">[docs]</a>    <span class="k">def</span> <span class="nf">get_struct_heat_flux</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Get the heat flux on the structure for the given scenario.</span>
 
@@ -817,7 +935,7 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">None</span></div>
 
-<div class="viewcode-block" id="Body.transfer_disps"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.transfer_disps">[docs]</a>    <span class="k">def</span> <span class="nf">transfer_disps</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.transfer_disps"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.transfer_disps">[docs]</a>    <span class="k">def</span> <span class="nf">transfer_disps</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">jump</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Transfer the displacements on the structural mesh to the aerodynamic mesh</span>
 <span class="sd">        for the given scenario.</span>
@@ -828,19 +946,22 @@
 <span class="sd">            The current scenario</span>
 <span class="sd">        time_index: int</span>
 <span class="sd">            The time-index for time-dependent problems</span>
+<span class="sd">        jump: bool</span>
+<span class="sd">            Whether to transfer from current to next time index</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">transfer</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">scenario</span><span class="o">.</span><span class="n">steady</span><span class="p">:</span>
                 <span class="n">aero_disps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">aero_disps</span><span class="p">[</span><span class="n">scenario</span><span class="o">.</span><span class="n">id</span><span class="p">]</span>
                 <span class="n">struct_disps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">struct_disps</span><span class="p">[</span><span class="n">scenario</span><span class="o">.</span><span class="n">id</span><span class="p">]</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="n">aero_disps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">aero_disps</span><span class="p">[</span><span class="n">scenario</span><span class="o">.</span><span class="n">id</span><span class="p">][</span><span class="n">time_index</span><span class="p">]</span>
+                <span class="n">aero_time_index</span> <span class="o">=</span> <span class="n">time_index</span> <span class="o">+</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">jump</span> <span class="k">else</span> <span class="n">time_index</span>
+                <span class="n">aero_disps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">aero_disps</span><span class="p">[</span><span class="n">scenario</span><span class="o">.</span><span class="n">id</span><span class="p">][</span><span class="n">aero_time_index</span><span class="p">]</span>
                 <span class="n">struct_disps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">struct_disps</span><span class="p">[</span><span class="n">scenario</span><span class="o">.</span><span class="n">id</span><span class="p">][</span><span class="n">time_index</span><span class="p">]</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">transfer</span><span class="o">.</span><span class="n">transferDisps</span><span class="p">(</span><span class="n">struct_disps</span><span class="p">,</span> <span class="n">aero_disps</span><span class="p">)</span>
 
         <span class="k">return</span></div>
 
-<div class="viewcode-block" id="Body.transfer_loads"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.transfer_loads">[docs]</a>    <span class="k">def</span> <span class="nf">transfer_loads</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.transfer_loads"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.transfer_loads">[docs]</a>    <span class="k">def</span> <span class="nf">transfer_loads</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Transfer the aerodynamic loads on the aero surface mesh to loads on the</span>
 <span class="sd">        structural mesh for the given scenario.</span>
@@ -863,7 +984,7 @@
 
         <span class="k">return</span></div>
 
-<div class="viewcode-block" id="Body.transfer_temps"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.transfer_temps">[docs]</a>    <span class="k">def</span> <span class="nf">transfer_temps</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.transfer_temps"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.transfer_temps">[docs]</a>    <span class="k">def</span> <span class="nf">transfer_temps</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">jump</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Transfer the temperatures on the structural mesh to the aerodynamic mesh</span>
 <span class="sd">        for the given scenario.</span>
@@ -880,13 +1001,14 @@
                 <span class="n">struct_temps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">struct_temps</span><span class="p">[</span><span class="n">scenario</span><span class="o">.</span><span class="n">id</span><span class="p">]</span>
                 <span class="n">aero_temps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">aero_temps</span><span class="p">[</span><span class="n">scenario</span><span class="o">.</span><span class="n">id</span><span class="p">]</span>
             <span class="k">else</span><span class="p">:</span>
+                <span class="n">aero_time_index</span> <span class="o">=</span> <span class="n">time_index</span> <span class="o">+</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">jump</span> <span class="k">else</span> <span class="n">time_index</span>
                 <span class="n">struct_temps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">struct_temps</span><span class="p">[</span><span class="n">scenario</span><span class="o">.</span><span class="n">id</span><span class="p">][</span><span class="n">time_index</span><span class="p">]</span>
-                <span class="n">aero_temps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">aero_temps</span><span class="p">[</span><span class="n">scenario</span><span class="o">.</span><span class="n">id</span><span class="p">][</span><span class="n">time_index</span><span class="p">]</span>
+                <span class="n">aero_temps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">aero_temps</span><span class="p">[</span><span class="n">scenario</span><span class="o">.</span><span class="n">id</span><span class="p">][</span><span class="n">aero_time_index</span><span class="p">]</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">thermal_transfer</span><span class="o">.</span><span class="n">transferTemp</span><span class="p">(</span><span class="n">struct_temps</span><span class="p">,</span> <span class="n">aero_temps</span><span class="p">)</span>
 
         <span class="k">return</span></div>
 
-<div class="viewcode-block" id="Body.transfer_heat_flux"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.transfer_heat_flux">[docs]</a>    <span class="k">def</span> <span class="nf">transfer_heat_flux</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.transfer_heat_flux"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.transfer_heat_flux">[docs]</a>    <span class="k">def</span> <span class="nf">transfer_heat_flux</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Transfer the aerodynamic heat flux on the aero surface mesh to the heat flux on the</span>
 <span class="sd">        structural mesh for the given scenario.</span>
@@ -909,7 +1031,7 @@
 
         <span class="k">return</span></div>
 
-<div class="viewcode-block" id="Body.get_aero_loads_ajp"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.get_aero_loads_ajp">[docs]</a>    <span class="k">def</span> <span class="nf">get_aero_loads_ajp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.get_aero_loads_ajp"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.get_aero_loads_ajp">[docs]</a>    <span class="k">def</span> <span class="nf">get_aero_loads_ajp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Get the product of the load transfer adjoint variables with the derivative</span>
 <span class="sd">        of the load transfer residuals with respect to the aerodynamic forces</span>
@@ -929,7 +1051,7 @@
 
         <span class="k">return</span> <span class="kc">None</span></div>
 
-<div class="viewcode-block" id="Body.get_aero_disps_ajp"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.get_aero_disps_ajp">[docs]</a>    <span class="k">def</span> <span class="nf">get_aero_disps_ajp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.get_aero_disps_ajp"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.get_aero_disps_ajp">[docs]</a>    <span class="k">def</span> <span class="nf">get_aero_disps_ajp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Get the product of the adjoint variables with the grid residuals with the</span>
 <span class="sd">        derivative of the displacement at the aerodynamic surface nodes</span>
@@ -953,7 +1075,7 @@
 
         <span class="k">return</span> <span class="kc">None</span></div>
 
-<div class="viewcode-block" id="Body.get_struct_loads_ajp"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.get_struct_loads_ajp">[docs]</a>    <span class="k">def</span> <span class="nf">get_struct_loads_ajp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.get_struct_loads_ajp"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.get_struct_loads_ajp">[docs]</a>    <span class="k">def</span> <span class="nf">get_struct_loads_ajp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Get the product of the structural adjoint variables with the derivative of the</span>
 <span class="sd">        structural residuals with respect to the structural loads.</span>
@@ -971,7 +1093,7 @@
 
         <span class="k">return</span> <span class="kc">None</span></div>
 
-<div class="viewcode-block" id="Body.get_struct_disps_ajp"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.get_struct_disps_ajp">[docs]</a>    <span class="k">def</span> <span class="nf">get_struct_disps_ajp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.get_struct_disps_ajp"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.get_struct_disps_ajp">[docs]</a>    <span class="k">def</span> <span class="nf">get_struct_disps_ajp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Get the product of the displacement transfer adjoint variables with the derivative</span>
 <span class="sd">        of the displacement transfer residuals w.r.t. the structural displacements plus the</span>
@@ -991,7 +1113,7 @@
 
         <span class="k">return</span> <span class="kc">None</span></div>
 
-<div class="viewcode-block" id="Body.get_aero_heat_flux_ajp"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.get_aero_heat_flux_ajp">[docs]</a>    <span class="k">def</span> <span class="nf">get_aero_heat_flux_ajp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.get_aero_heat_flux_ajp"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.get_aero_heat_flux_ajp">[docs]</a>    <span class="k">def</span> <span class="nf">get_aero_heat_flux_ajp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="sd">        aero_flux_ajp = dQ/dhA^{T} * psi_Q</span>
@@ -1007,7 +1129,7 @@
 
         <span class="k">return</span> <span class="kc">None</span></div>
 
-<div class="viewcode-block" id="Body.get_struct_heat_flux_ajp"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.get_struct_heat_flux_ajp">[docs]</a>    <span class="k">def</span> <span class="nf">get_struct_heat_flux_ajp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.get_struct_heat_flux_ajp"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.get_struct_heat_flux_ajp">[docs]</a>    <span class="k">def</span> <span class="nf">get_struct_heat_flux_ajp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="sd">        struct_flux_ajp = dS/dhS^{T} * psi_S</span>
@@ -1023,7 +1145,7 @@
 
         <span class="k">return</span> <span class="kc">None</span></div>
 
-<div class="viewcode-block" id="Body.get_aero_temps_ajp"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.get_aero_temps_ajp">[docs]</a>    <span class="k">def</span> <span class="nf">get_aero_temps_ajp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.get_aero_temps_ajp"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.get_aero_temps_ajp">[docs]</a>    <span class="k">def</span> <span class="nf">get_aero_temps_ajp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Get the</span>
 
@@ -1043,7 +1165,7 @@
 
         <span class="k">return</span> <span class="kc">None</span></div>
 
-<div class="viewcode-block" id="Body.get_struct_temps_ajp"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.get_struct_temps_ajp">[docs]</a>    <span class="k">def</span> <span class="nf">get_struct_temps_ajp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.get_struct_temps_ajp"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.get_struct_temps_ajp">[docs]</a>    <span class="k">def</span> <span class="nf">get_struct_temps_ajp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="sd">        struct_temps_ajp = dT/dtS^{T} * psi_T</span>
@@ -1059,7 +1181,7 @@
 
         <span class="k">return</span> <span class="kc">None</span></div>
 
-<div class="viewcode-block" id="Body.transfer_loads_adjoint"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.transfer_loads_adjoint">[docs]</a>    <span class="k">def</span> <span class="nf">transfer_loads_adjoint</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.transfer_loads_adjoint"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.transfer_loads_adjoint">[docs]</a>    <span class="k">def</span> <span class="nf">transfer_loads_adjoint</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Perform the adjoint computation for the load transfer operation. This code</span>
 <span class="sd">        computes and stores the required Jacobian-adjoint products.</span>
@@ -1110,7 +1232,7 @@
 
         <span class="k">return</span></div>
 
-<div class="viewcode-block" id="Body.transfer_disps_adjoint"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.transfer_disps_adjoint">[docs]</a>    <span class="k">def</span> <span class="nf">transfer_disps_adjoint</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.transfer_disps_adjoint"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.transfer_disps_adjoint">[docs]</a>    <span class="k">def</span> <span class="nf">transfer_disps_adjoint</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Perform the adjoint computation for the displacement transfer operations. This code</span>
 <span class="sd">        computes and stores required Jacobian-adjoint products.</span>
@@ -1154,7 +1276,7 @@
 
         <span class="k">return</span></div>
 
-<div class="viewcode-block" id="Body.transfer_heat_flux_adjoint"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.transfer_heat_flux_adjoint">[docs]</a>    <span class="k">def</span> <span class="nf">transfer_heat_flux_adjoint</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.transfer_heat_flux_adjoint"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.transfer_heat_flux_adjoint">[docs]</a>    <span class="k">def</span> <span class="nf">transfer_heat_flux_adjoint</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Perform the adjoint computation for the heat flux transfer operations.</span>
 
@@ -1194,7 +1316,7 @@
 
         <span class="k">return</span></div>
 
-<div class="viewcode-block" id="Body.transfer_temps_adjoint"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.transfer_temps_adjoint">[docs]</a>    <span class="k">def</span> <span class="nf">transfer_temps_adjoint</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.transfer_temps_adjoint"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.transfer_temps_adjoint">[docs]</a>    <span class="k">def</span> <span class="nf">transfer_temps_adjoint</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">time_index</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Perform the adjoint computations for the thermal transfer operation.</span>
 
@@ -1232,7 +1354,7 @@
 
         <span class="k">return</span></div>
 
-<div class="viewcode-block" id="Body.get_aero_coordinate_derivatives"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.get_aero_coordinate_derivatives">[docs]</a>    <span class="k">def</span> <span class="nf">get_aero_coordinate_derivatives</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.get_aero_coordinate_derivatives"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.get_aero_coordinate_derivatives">[docs]</a>    <span class="k">def</span> <span class="nf">get_aero_coordinate_derivatives</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Get the coordinate derivatives for the functions with respect to the</span>
 <span class="sd">        aerodynamic surface nodes</span>
@@ -1244,7 +1366,7 @@
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">aero_shape_term</span></div>
 
-<div class="viewcode-block" id="Body.get_struct_coordinate_derivatives"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.get_struct_coordinate_derivatives">[docs]</a>    <span class="k">def</span> <span class="nf">get_struct_coordinate_derivatives</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.get_struct_coordinate_derivatives"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.get_struct_coordinate_derivatives">[docs]</a>    <span class="k">def</span> <span class="nf">get_struct_coordinate_derivatives</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Get the coordinate derivatives for the functions with respect to the</span>
 <span class="sd">        structural nodes</span>
@@ -1256,7 +1378,7 @@
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">struct_shape_term</span></div>
 
-<div class="viewcode-block" id="Body.add_coordinate_derivative"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.add_coordinate_derivative">[docs]</a>    <span class="k">def</span> <span class="nf">add_coordinate_derivative</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">step</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.add_coordinate_derivative"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.add_coordinate_derivative">[docs]</a>    <span class="k">def</span> <span class="nf">add_coordinate_derivative</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">step</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Add the coordinate derivatives for each function of interest to the aerodynamic</span>
 <span class="sd">        and structural surface nodes - stored in aero_shape_term and struct_shape_term, respectively</span>
@@ -1294,129 +1416,368 @@
 
         <span class="k">return</span></div>
 
-<div class="viewcode-block" id="Body.aitken_relax"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.aitken_relax">[docs]</a>    <span class="k">def</span> <span class="nf">aitken_relax</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">tol</span><span class="o">=</span><span class="mf">1e-13</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.aitken_relax"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.aitken_relax">[docs]</a>    <span class="k">def</span> <span class="nf">aitken_relax</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">comm</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">tol</span><span class="o">=</span><span class="mf">1e-13</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Perform Aitken relaxation for the displacements set in the</span>
 <span class="sd">        &quot;&quot;&quot;</span>
 
         <span class="c1"># If Aitken relaxation is turned off, skip this</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_aitken_accel</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">use_aitken_accel</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">use_simple_accel</span><span class="p">):</span>
             <span class="k">return</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">aitken_is_initialized</span><span class="p">:</span>
+            <span class="c1"># Aitken data for the displacements</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">theta</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">theta_init</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">prev_update</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">3</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">struct_nnodes</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">aitken_vec</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">3</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">struct_nnodes</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+
+            <span class="c1"># Aitken data for the temperatures</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">theta_t</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">theta_init</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">prev_update_t</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">struct_nnodes</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">aitken_vec_t</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">struct_nnodes</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span> <span class="o">*</span> <span class="n">scenario</span><span class="o">.</span><span class="n">T_ref</span>
+            <span class="p">)</span>
+
             <span class="bp">self</span><span class="o">.</span><span class="n">aitken_is_initialized</span> <span class="o">=</span> <span class="kc">True</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">transfer</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">struct_disps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_struct_disps</span><span class="p">(</span><span class="n">scenario</span><span class="p">)</span>
             <span class="n">up</span> <span class="o">=</span> <span class="n">struct_disps</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">aitken_vec</span>
-            <span class="n">norm2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">up</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">prev_update</span><span class="p">)</span> <span class="o">**</span> <span class="mf">2.0</span>
 
-            <span class="c1"># Only update theta if the displacements changed</span>
-            <span class="k">if</span> <span class="n">norm2</span> <span class="o">&gt;</span> <span class="n">tol</span><span class="p">:</span>
-                <span class="c1"># Compute the tentative theta value</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">theta</span> <span class="o">*=</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="p">(</span><span class="n">up</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">prev_update</span><span class="p">)</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">up</span><span class="p">)</span> <span class="o">/</span> <span class="n">norm2</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_aitken_accel</span><span class="p">:</span>
+                <span class="n">norm2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">up</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">prev_update</span><span class="p">)</span> <span class="o">**</span> <span class="mf">2.0</span>
+                <span class="n">norm2</span> <span class="o">=</span> <span class="n">comm</span><span class="o">.</span><span class="n">allreduce</span><span class="p">(</span><span class="n">norm2</span><span class="p">)</span>
 
-                <span class="bp">self</span><span class="o">.</span><span class="n">theta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span>
-                    <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">theta</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">theta_max</span><span class="p">)),</span> <span class="bp">self</span><span class="o">.</span><span class="n">theta_min</span><span class="p">)</span>
-                <span class="p">)</span>
+                <span class="c1"># Only update theta if the displacements changed</span>
+                <span class="k">if</span> <span class="n">norm2</span> <span class="o">&gt;</span> <span class="n">tol</span><span class="p">:</span>
+                    <span class="c1"># Compute the tentative theta value</span>
+                    <span class="n">value</span> <span class="o">=</span> <span class="p">(</span><span class="n">up</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">prev_update</span><span class="p">)</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">up</span><span class="p">)</span>
+                    <span class="n">value</span> <span class="o">=</span> <span class="n">comm</span><span class="o">.</span><span class="n">allreduce</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">theta</span> <span class="o">*=</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="n">value</span> <span class="o">/</span> <span class="n">norm2</span>
 
-            <span class="c1"># handle the min/max for complex step</span>
-            <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">theta</span><span class="p">)</span> <span class="o">==</span> <span class="n">np</span><span class="o">.</span><span class="n">complex128</span> <span class="ow">or</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">theta</span><span class="p">)</span> <span class="o">==</span> <span class="nb">complex</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">theta</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">theta</span><span class="o">.</span><span class="n">real</span> <span class="o">+</span> <span class="mf">0.0</span><span class="n">j</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">theta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span>
+                        <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">theta</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">theta_max</span><span class="p">)),</span> <span class="bp">self</span><span class="o">.</span><span class="n">theta_min</span><span class="p">)</span>
+                    <span class="p">)</span>
 
+                <span class="c1"># handle the min/max for complex step</span>
+                <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">theta</span><span class="p">)</span> <span class="o">==</span> <span class="n">np</span><span class="o">.</span><span class="n">complex128</span> <span class="ow">or</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">theta</span><span class="p">)</span> <span class="o">==</span> <span class="nb">complex</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">theta</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">theta</span><span class="o">.</span><span class="n">real</span> <span class="o">+</span> <span class="mf">0.0</span><span class="n">j</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_simple_accel</span><span class="p">:</span>
+                <span class="c1"># overwrite theta learning rate from the relaxation scheme</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">theta</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">relaxation_scheme</span><span class="o">.</span><span class="n">theta</span>
+
+                <span class="c1"># call the scheme to drop the learning rate for the next iteration</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">relaxation_scheme</span><span class="o">.</span><span class="n">relax_displacement</span><span class="p">()</span>
+
+            <span class="c1"># perform the aitken update for displacement transfer</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">aitken_vec</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">theta</span> <span class="o">*</span> <span class="n">up</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">prev_update</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">up</span><span class="p">[:]</span>
             <span class="n">struct_disps</span><span class="p">[:]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">aitken_vec</span>
 
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">thermal_transfer</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">struct_temps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_struct_temps</span><span class="p">(</span><span class="n">scenario</span><span class="p">)</span>
+            <span class="n">up</span> <span class="o">=</span> <span class="n">struct_temps</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">aitken_vec_t</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_aitken_accel</span><span class="p">:</span>
+                <span class="n">norm2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">up</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">prev_update_t</span><span class="p">)</span> <span class="o">**</span> <span class="mf">2.0</span>
+                <span class="n">norm2</span> <span class="o">=</span> <span class="n">comm</span><span class="o">.</span><span class="n">allreduce</span><span class="p">(</span><span class="n">norm2</span><span class="p">)</span>
+
+                <span class="c1"># Only update theta if the temperatures changed</span>
+                <span class="k">if</span> <span class="n">norm2</span> <span class="o">&gt;</span> <span class="n">tol</span><span class="p">:</span>
+                    <span class="c1"># Compute the tentative theta value</span>
+                    <span class="n">value</span> <span class="o">=</span> <span class="p">(</span><span class="n">up</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">prev_update_t</span><span class="p">)</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">up</span><span class="p">)</span>
+                    <span class="n">value</span> <span class="o">=</span> <span class="n">comm</span><span class="o">.</span><span class="n">allreduce</span><span class="p">(</span><span class="n">value</span><span class="o">.</span><span class="n">real</span><span class="p">)</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">theta_t</span> <span class="o">*=</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="n">value</span> <span class="o">/</span> <span class="n">norm2</span>
+
+                    <span class="bp">self</span><span class="o">.</span><span class="n">theta_t</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span>
+                        <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">theta_t</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">theta_max</span><span class="p">)),</span> <span class="bp">self</span><span class="o">.</span><span class="n">theta_min</span><span class="p">)</span>
+                    <span class="p">)</span>
+
+                <span class="c1"># handle the min/max for complex step</span>
+                <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">theta_t</span><span class="p">)</span> <span class="o">==</span> <span class="n">np</span><span class="o">.</span><span class="n">complex128</span> <span class="ow">or</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">theta_t</span><span class="p">)</span> <span class="o">==</span> <span class="nb">complex</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">theta_t</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">theta_t</span><span class="o">.</span><span class="n">real</span> <span class="o">+</span> <span class="mf">0.0</span><span class="n">j</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_simple_accel</span><span class="p">:</span>
+                <span class="c1"># overwrite theta learning rate from the relaxation scheme</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">theta_t</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">relaxation_scheme</span><span class="o">.</span><span class="n">theta_t</span>
+
+                <span class="c1"># call the scheme to drop the learning rate for the next iteration</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">relaxation_scheme</span><span class="o">.</span><span class="n">relax_thermal</span><span class="p">()</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">aitken_vec_t</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">theta_t</span> <span class="o">*</span> <span class="n">up</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">prev_update_t</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">up</span><span class="p">[:]</span>
+            <span class="n">struct_temps</span><span class="p">[:]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">aitken_vec_t</span>
+
         <span class="k">return</span></div>
 
-    <span class="k">def</span> <span class="nf">aitken_adjoint_relax</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">tol</span><span class="o">=</span><span class="mf">1e-16</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">aitken_adjoint_relax</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">comm</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">tol</span><span class="o">=</span><span class="mf">1e-16</span><span class="p">):</span>
+        <span class="c1"># If Aitken relaxation is turned off, skip this</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">use_aitken_accel</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">use_simple_accel</span><span class="p">):</span>
+            <span class="k">return</span>
+
+        <span class="c1"># exit early to not perform aitken adjoint relax</span>
         <span class="k">return</span>
-        <span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        INCOMPLETE NEW AITKEN IMPLEMENTATION BELOW</span>
-<span class="sd">        Attempt at elastic implementation, not thermal</span>
-<span class="sd">        &quot;&quot;&quot;</span>
 
-        <span class="n">nfunctions</span> <span class="o">=</span> <span class="n">scenario</span><span class="o">.</span><span class="n">count_adjoint_functions</span><span class="p">()</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">aitken_init</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">aitken_init</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="c1"># number of nodes and functions</span>
+        <span class="n">ns</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">struct_nnodes</span>
+        <span class="n">nf</span> <span class="o">=</span> <span class="n">scenario</span><span class="o">.</span><span class="n">count_adjoint_functions</span><span class="p">()</span>
 
-            <span class="c1"># initialize &quot;previous update&quot; to zero</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">aitken_adj_is_initialized</span><span class="p">:</span>
+            <span class="c1"># Aitken data for the displacements</span>
+            <span class="c1"># self.theta_adj = self.theta_init</span>
+            <span class="c1"># self.prev_update = np.zeros(3 * self.struct_nnodes, dtype=self.dtype)</span>
+            <span class="c1"># self.aitken_vec = np.zeros(3 * self.struct_nnodes, dtype=self.dtype)</span>
 
-            <span class="bp">self</span><span class="o">.</span><span class="n">aitken_vec</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">3</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">struct_nnodes</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">prev_update</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">3</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">struct_nnodes</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">theta</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">theta_init</span>
+            <span class="c1"># Aitken data for the temperatures</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">theta_adj_t</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="n">nf</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">theta_init</span>
 
-            <span class="c1"># initialize &quot;previous (thermal) update&quot; to zero</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">therm_up_prev</span> <span class="o">=</span> <span class="p">[]</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">aitken_therm_vec</span> <span class="o">=</span> <span class="p">[]</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">theta_therm</span> <span class="o">=</span> <span class="p">[]</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">transfer</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">up_prev_body</span> <span class="o">=</span> <span class="p">[]</span>
-                <span class="n">aitken_vec_body</span> <span class="o">=</span> <span class="p">[]</span>
-                <span class="n">theta_body</span> <span class="o">=</span> <span class="p">[]</span>
-                <span class="k">for</span> <span class="n">func</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nfunctions</span><span class="p">):</span>
-                    <span class="n">up_prev_body</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                        <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">struct_nnodes</span> <span class="o">*</span> <span class="mi">3</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">TransferScheme</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
-                    <span class="p">)</span>
-                    <span class="n">aitken_vec_body</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                        <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">struct_nnodes</span> <span class="o">*</span> <span class="mi">3</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">TransferScheme</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
-                    <span class="p">)</span>
-                    <span class="c1"># theta_body.append(self.theta_init)</span>
-                <span class="c1"># self.up_prev.append(up_prev_body)</span>
-                <span class="c1"># self.aitken_vec (aitken_vec_body)</span>
-                <span class="c1"># self.theta.append(theta_body)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">prev_adj_update_t</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">ns</span><span class="p">,</span> <span class="n">nf</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">aitken_adj_vec_t</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">ns</span><span class="p">,</span> <span class="n">nf</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
 
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">thermal_transfer</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">up_prev_body</span> <span class="o">=</span> <span class="p">[]</span>
-                <span class="n">aitken_therm_vec_body</span> <span class="o">=</span> <span class="p">[]</span>
-                <span class="n">theta_body</span> <span class="o">=</span> <span class="p">[]</span>
-                <span class="k">for</span> <span class="n">func</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nfunctions</span><span class="p">):</span>
-                    <span class="n">up_prev_body</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                        <span class="n">scenario</span><span class="o">.</span><span class="n">T_ref</span>
-                        <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">struct_nnodes</span> <span class="o">*</span> <span class="mi">1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">TransferScheme</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
-                    <span class="p">)</span>
-                    <span class="n">aitken_therm_vec_body</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                        <span class="n">scenario</span><span class="o">.</span><span class="n">T_ref</span>
-                        <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">struct_nnodes</span> <span class="o">*</span> <span class="mi">1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">TransferScheme</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
-                    <span class="p">)</span>
-                    <span class="n">theta_body</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">theta_therm_init</span><span class="p">)</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">therm_up_prev</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">up_prev_body</span><span class="p">)</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">aitken_therm_vec</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">aitken_therm_vec_body</span><span class="p">)</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">theta_therm</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">theta_body</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">aitken_adj_is_initialized</span> <span class="o">=</span> <span class="kc">True</span>
 
-        <span class="c1"># do the Aitken update</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">transfer</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">for</span> <span class="n">func</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nfunctions</span><span class="p">):</span>
-                <span class="n">up</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">struct_loads_ajp</span><span class="p">[:,</span> <span class="n">func</span><span class="p">]</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">aitken_vec</span>
-                <span class="c1"># print(&quot;adj up shape: &quot;, self.aitken_vec[func].shape)</span>
-                <span class="c1"># print(&quot;Update: &quot;, up[-1])</span>
-                <span class="n">norm2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">up</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">prev_update</span><span class="p">)</span> <span class="o">**</span> <span class="mf">2.0</span>
-                <span class="c1"># print(&quot;Prev update: &quot;, np.linalg.norm(self.prev_update))</span>
+        <span class="n">struct_flux_ajp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_struct_heat_flux_ajp</span><span class="p">(</span><span class="n">scenario</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">thermal_transfer</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">ifunc</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nf</span><span class="p">):</span>
+                <span class="c1"># if comm.rank == 0: print(f&quot;Aitken adjoint loop, func {ifunc}&quot;,flush=True)</span>
+                <span class="n">up</span> <span class="o">=</span> <span class="n">struct_flux_ajp</span><span class="p">[:,</span> <span class="n">ifunc</span><span class="p">]</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">aitken_adj_vec_t</span><span class="p">[:,</span> <span class="n">ifunc</span><span class="p">]</span>
 
-                <span class="c1"># only update theta if vec changed</span>
-                <span class="k">if</span> <span class="n">norm2</span> <span class="o">&gt;</span> <span class="n">tol</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">theta</span> <span class="o">*=</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="p">(</span><span class="n">up</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">prev_update</span><span class="p">)</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">up</span><span class="p">)</span> <span class="o">/</span> <span class="n">norm2</span>
-                    <span class="c1"># print(&quot;theta pre = &quot;, self.theta)</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_aitken_accel</span><span class="p">:</span>
+                    <span class="n">norm2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">up</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">prev_adj_update_t</span><span class="p">[:,</span> <span class="n">ifunc</span><span class="p">])</span> <span class="o">**</span> <span class="mf">2.0</span>
+                    <span class="n">norm2</span> <span class="o">=</span> <span class="n">comm</span><span class="o">.</span><span class="n">allreduce</span><span class="p">(</span><span class="n">norm2</span><span class="p">)</span>
 
-                    <span class="bp">self</span><span class="o">.</span><span class="n">theta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span>
-                        <span class="p">(</span>
-                            <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">theta</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">theta_max</span><span class="p">)),</span>
-                            <span class="bp">self</span><span class="o">.</span><span class="n">theta_min</span><span class="p">,</span>
+                    <span class="c1"># Only update theta if the temperatures changed</span>
+                    <span class="k">if</span> <span class="n">norm2</span> <span class="o">&gt;</span> <span class="n">tol</span><span class="p">:</span>
+                        <span class="c1"># Compute the tentative theta value</span>
+                        <span class="n">value</span> <span class="o">=</span> <span class="p">(</span><span class="n">up</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">prev_adj_update_t</span><span class="p">[:,</span> <span class="n">ifunc</span><span class="p">])</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">up</span><span class="p">)</span>
+                        <span class="n">value</span> <span class="o">=</span> <span class="n">comm</span><span class="o">.</span><span class="n">allreduce</span><span class="p">(</span><span class="n">value</span><span class="o">.</span><span class="n">real</span><span class="p">)</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">theta_adj_t</span><span class="p">[</span><span class="n">ifunc</span><span class="p">]</span> <span class="o">*=</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="n">value</span> <span class="o">/</span> <span class="n">norm2</span>
+
+                        <span class="bp">self</span><span class="o">.</span><span class="n">theta_adj_t</span><span class="p">[</span><span class="n">ifunc</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span>
+                            <span class="p">(</span>
+                                <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">theta_adj_t</span><span class="p">[</span><span class="n">ifunc</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">theta_max</span><span class="p">)),</span>
+                                <span class="bp">self</span><span class="o">.</span><span class="n">theta_min</span><span class="p">,</span>
+                            <span class="p">)</span>
                         <span class="p">)</span>
-                    <span class="p">)</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">aitken_vec</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">theta</span> <span class="o">*</span> <span class="n">up</span>
-                <span class="c1"># print(&quot;theta = &quot;, self.theta)</span>
-                <span class="c1"># print(&quot;aitken vec norm: &quot;, np.linalg.norm(self.aitken_vec))</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">prev_update</span> <span class="o">=</span> <span class="n">up</span><span class="p">[:]</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">struct_loads_ajp</span><span class="p">[:,</span> <span class="n">func</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">aitken_vec</span><span class="p">[:]</span>
+
+                    <span class="c1"># handle the min/max for complex step</span>
+                    <span class="k">if</span> <span class="p">(</span>
+                        <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">theta_adj_t</span><span class="p">[</span><span class="n">ifunc</span><span class="p">])</span> <span class="o">==</span> <span class="n">np</span><span class="o">.</span><span class="n">complex128</span>
+                        <span class="ow">or</span> <span class="nb">type</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">theta_adj_t</span><span class="p">[</span><span class="n">ifunc</span><span class="p">])</span> <span class="o">==</span> <span class="nb">complex</span>
+                    <span class="p">):</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">theta_adj_t</span><span class="p">[</span><span class="n">ifunc</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">theta_adj_t</span><span class="p">[</span><span class="n">ifunc</span><span class="p">]</span><span class="o">.</span><span class="n">real</span> <span class="o">+</span> <span class="mf">0.0</span><span class="n">j</span>
+
+                <span class="c1"># if self.use_simple_accel:</span>
+                <span class="c1">#     # overwrite theta learning rate from the relaxation scheme</span>
+                <span class="c1">#     self.theta_t = self.relaxation_scheme.theta_t</span>
+
+                <span class="c1">#     # call the scheme to drop the learning rate for the next iteration</span>
+                <span class="c1">#     self.relaxation_scheme.relax_thermal()</span>
+
+                <span class="bp">self</span><span class="o">.</span><span class="n">aitken_adj_vec_t</span><span class="p">[:,</span> <span class="n">ifunc</span><span class="p">]</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">theta_adj_t</span><span class="p">[</span><span class="n">ifunc</span><span class="p">]</span> <span class="o">*</span> <span class="n">up</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">prev_adj_update_t</span><span class="p">[:,</span> <span class="n">ifunc</span><span class="p">]</span> <span class="o">=</span> <span class="n">up</span><span class="p">[:]</span>
+                <span class="n">struct_flux_ajp</span><span class="p">[:,</span> <span class="n">ifunc</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">aitken_adj_vec_t</span><span class="p">[:,</span> <span class="n">ifunc</span><span class="p">]</span>
+
+                <span class="c1"># barrier before next iteration</span>
+                <span class="c1"># comm.Barrier()</span>
+
+        <span class="c1"># elastic adjoint transfer</span>
+        <span class="c1"># if self.transfer is not None:</span>
+        <span class="c1">#     struct_disps = self.get_struct_disps(scenario)</span>
+        <span class="c1">#     up = struct_disps - self.aitken_vec</span>
+
+        <span class="c1">#     if self.use_aitken_accel:</span>
+        <span class="c1">#         norm2 = np.linalg.norm(up - self.prev_update) ** 2.0</span>
+        <span class="c1">#         norm2 = comm.allreduce(norm2)</span>
+
+        <span class="c1">#         # Only update theta if the displacements changed</span>
+        <span class="c1">#         if norm2 &gt; tol:</span>
+        <span class="c1">#             # Compute the tentative theta value</span>
+        <span class="c1">#             value = (up - self.prev_update).dot(up)</span>
+        <span class="c1">#             value = comm.allreduce(value)</span>
+        <span class="c1">#             self.theta *= 1.0 - value / norm2</span>
+
+        <span class="c1">#       :q      self.theta = np.max(</span>
+        <span class="c1">#                 (np.min((self.theta, self.theta_max)), self.theta_min)</span>
+        <span class="c1">#             )</span>
+
+        <span class="c1">#         # handle the min/max for complex step</span>
+        <span class="c1">#         if type(self.theta) == np.complex128 or type(self.theta) == complex:</span>
+        <span class="c1">#             self.theta = self.theta.real + 0.0j</span>
+
+        <span class="c1">#     if self.use_simple_accel:</span>
+        <span class="c1">#         # overwrite theta learning rate from the relaxation scheme</span>
+        <span class="c1">#         self.theta = self.relaxation_scheme.theta</span>
+
+        <span class="c1">#         # call the scheme to drop the learning rate for the next iteration</span>
+        <span class="c1">#         self.relaxation_scheme.relax_displacement()</span>
+
+        <span class="c1">#     # perform the aitken update for displacement transfer</span>
+        <span class="c1">#     self.aitken_vec += self.theta * up</span>
+        <span class="c1">#     self.prev_update[:] = up[:]</span>
+        <span class="c1">#     struct_disps[:] = self.aitken_vec</span>
 
         <span class="k">return</span>
 
-<div class="viewcode-block" id="Body.collect_coordinate_derivatives"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.collect_coordinate_derivatives">[docs]</a>    <span class="k">def</span> <span class="nf">collect_coordinate_derivatives</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">comm</span><span class="p">,</span> <span class="n">discipline</span><span class="p">,</span> <span class="n">root</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">_distribute_aero_loads</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        distribute the aero loads and heat flux from a loads file</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">scenario_id</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+            <span class="n">scenario_data</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">scenario_id</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">scenario_data</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">ind</span><span class="p">,</span> <span class="n">aero_id</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">aero_id</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">entry</span><span class="p">[</span><span class="s2">&quot;aeroID&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">aero_id</span> <span class="ow">and</span> <span class="n">entry</span><span class="p">[</span><span class="s2">&quot;bodyName&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">transfer</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">aero_loads</span><span class="p">[</span><span class="n">scenario_id</span><span class="p">][</span><span class="mi">3</span> <span class="o">*</span> <span class="n">ind</span> <span class="p">:</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">ind</span> <span class="o">+</span> <span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="n">entry</span><span class="p">[</span>
+                                <span class="s2">&quot;load&quot;</span>
+                            <span class="p">]</span>
+                        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">thermal_transfer</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">aero_heat_flux</span><span class="p">[</span><span class="n">scenario_id</span><span class="p">][</span><span class="n">ind</span><span class="p">]</span> <span class="o">=</span> <span class="n">entry</span><span class="p">[</span><span class="s2">&quot;hflux&quot;</span><span class="p">]</span>
+                        <span class="k">break</span>
+
+    <span class="k">def</span> <span class="nf">_collect_aero_mesh</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">comm</span><span class="p">,</span> <span class="n">root</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        gather the aero ids, and aero mesh coordinates or aero_X onto the root processor</span>
+<span class="sd">        these will later be written to the loads file</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">all_aero_ids</span> <span class="o">=</span> <span class="n">comm</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">aero_id</span><span class="p">,</span> <span class="n">root</span><span class="o">=</span><span class="n">root</span><span class="p">)</span>
+        <span class="n">all_aero_X</span> <span class="o">=</span> <span class="n">comm</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">aero_X</span><span class="p">,</span> <span class="n">root</span><span class="o">=</span><span class="n">root</span><span class="p">)</span>
+
+        <span class="n">aero_ids</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">aero_X</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">if</span> <span class="n">comm</span><span class="o">.</span><span class="n">rank</span> <span class="o">==</span> <span class="n">root</span><span class="p">:</span>
+            <span class="n">aero_ids</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">all_aero_ids</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">d</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">aero_ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+
+            <span class="n">aero_X</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">all_aero_X</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">d</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">aero_X</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">aero_ids</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">aero_ids</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">aero_X</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">//</span> <span class="mi">3</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">aero_ids</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">aero_ids</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">aero_X</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">aero_X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">3</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">aero_ids</span><span class="p">),</span> <span class="mi">1</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">aero_X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">aero_X</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">aero_ids</span><span class="p">,</span> <span class="n">aero_X</span>
+
+    <span class="k">def</span> <span class="nf">_collect_aero_loads</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">comm</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">root</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        gather the aerodynamic load and heat flux from each MPI processor onto the root</span>
+<span class="sd">        Then return the global aero ids, heat fluxes, and loads, which are later written to a file</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">all_aero_ids</span> <span class="o">=</span> <span class="n">comm</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">aero_id</span><span class="p">,</span> <span class="n">root</span><span class="o">=</span><span class="n">root</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">transfer</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">all_aero_loads</span> <span class="o">=</span> <span class="n">comm</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">aero_loads</span><span class="p">[</span><span class="n">scenario</span><span class="o">.</span><span class="n">id</span><span class="p">],</span> <span class="n">root</span><span class="o">=</span><span class="n">root</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">all_aero_loads</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">thermal_transfer</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">all_aero_hflux</span> <span class="o">=</span> <span class="n">comm</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">aero_heat_flux</span><span class="p">[</span><span class="n">scenario</span><span class="o">.</span><span class="n">id</span><span class="p">],</span> <span class="n">root</span><span class="o">=</span><span class="n">root</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">all_aero_hflux</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="n">aero_ids</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">aero_loads</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">aero_hflux</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">if</span> <span class="n">comm</span><span class="o">.</span><span class="n">rank</span> <span class="o">==</span> <span class="n">root</span><span class="p">:</span>
+            <span class="n">aero_ids</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">all_aero_ids</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">d</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">aero_ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+
+            <span class="n">aero_loads</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">all_aero_loads</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">d</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">aero_loads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+
+            <span class="n">aero_hflux</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">all_aero_hflux</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">d</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">aero_hflux</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">aero_ids</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">aero_ids</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">aero_loads</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">//</span> <span class="mi">3</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">aero_ids</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">aero_ids</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">aero_loads</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">aero_loads</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">aero_loads</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">aero_loads</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">3</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">aero_ids</span><span class="p">),</span> <span class="mi">1</span><span class="p">))</span>
+
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">aero_hflux</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">aero_hflux</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">aero_hflux</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">aero_hflux</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">1</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">aero_ids</span><span class="p">),</span> <span class="mi">1</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="n">aero_ids</span><span class="p">,</span> <span class="n">aero_hflux</span><span class="p">,</span> <span class="n">aero_loads</span>
+
+    <span class="k">def</span> <span class="nf">_collect_struct_loads</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">comm</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">root</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        gather the structural load and heat flux from each MPI processor onto the root</span>
+<span class="sd">        Then return the global structural ids, heat fluxes, and loads, which are later written to a file</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">all_struct_ids</span> <span class="o">=</span> <span class="n">comm</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">struct_id</span><span class="p">,</span> <span class="n">root</span><span class="o">=</span><span class="n">root</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">transfer</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">all_struct_loads</span> <span class="o">=</span> <span class="n">comm</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">struct_loads</span><span class="p">[</span><span class="n">scenario</span><span class="o">.</span><span class="n">id</span><span class="p">],</span> <span class="n">root</span><span class="o">=</span><span class="n">root</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">all_struct_loads</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">thermal_transfer</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">all_struct_hflux</span> <span class="o">=</span> <span class="n">comm</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">struct_heat_flux</span><span class="p">[</span><span class="n">scenario</span><span class="o">.</span><span class="n">id</span><span class="p">],</span> <span class="n">root</span><span class="o">=</span><span class="n">root</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">all_struct_hflux</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="n">struct_ids</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">struct_loads</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">struct_hflux</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">if</span> <span class="n">comm</span><span class="o">.</span><span class="n">rank</span> <span class="o">==</span> <span class="n">root</span><span class="p">:</span>
+            <span class="n">struct_ids</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">all_struct_ids</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">d</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">struct_ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+
+            <span class="n">struct_loads</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">all_struct_loads</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">d</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">struct_loads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+
+            <span class="n">struct_hflux</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">all_struct_hflux</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">d</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">struct_hflux</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">struct_ids</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">struct_ids</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">struct_loads</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">//</span> <span class="mi">3</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">struct_ids</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">struct_ids</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">struct_loads</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">struct_loads</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">struct_loads</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">struct_loads</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">3</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">struct_ids</span><span class="p">),</span> <span class="mi">1</span><span class="p">))</span>
+
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">struct_hflux</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">struct_hflux</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">struct_hflux</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">struct_hflux</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">1</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">struct_ids</span><span class="p">),</span> <span class="mi">1</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="n">struct_ids</span><span class="p">,</span> <span class="n">struct_hflux</span><span class="p">,</span> <span class="n">struct_loads</span>
+
+<div class="viewcode-block" id="Body.collect_coordinate_derivatives"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.collect_coordinate_derivatives">[docs]</a>    <span class="k">def</span> <span class="nf">collect_coordinate_derivatives</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">comm</span><span class="p">,</span> <span class="n">discipline</span><span class="p">,</span> <span class="n">root</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Write the sensitivity files for the aerodynamic and structural meshes on</span>
 <span class="sd">        the root processor.</span>
@@ -1486,6 +1847,8 @@
 
                 <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">struct_ids</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
                     <span class="n">struct_ids</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">struct_shape</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">//</span> <span class="mi">3</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">)</span>
+                    <span class="c1"># add 1 to struct_ids to make one-based for nastran</span>
+                    <span class="n">struct_ids</span> <span class="o">+=</span> <span class="mi">1</span>
                 <span class="k">else</span><span class="p">:</span>
                     <span class="n">struct_ids</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">struct_ids</span><span class="p">)</span>
 
@@ -1493,7 +1856,7 @@
 
         <span class="k">return</span></div>
 
-<div class="viewcode-block" id="Body.initialize_shape_parameterization"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.initialize_shape_parameterization">[docs]</a>    <span class="k">def</span> <span class="nf">initialize_shape_parameterization</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.initialize_shape_parameterization"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.initialize_shape_parameterization">[docs]</a>    <span class="k">def</span> <span class="nf">initialize_shape_parameterization</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        **[driver call]**</span>
 <span class="sd">        Create the map of structural node locations since TACS doesn&#39;t give us global id numbers</span>
@@ -1502,7 +1865,7 @@
 
         <span class="k">return</span></div>
 
-<div class="viewcode-block" id="Body.update_shape"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.update_shape">[docs]</a>    <span class="k">def</span> <span class="nf">update_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">complex_run</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.update_shape"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.update_shape">[docs]</a>    <span class="k">def</span> <span class="nf">update_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">complex_run</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        **[driver call]**</span>
 <span class="sd">        perturbs the shape of the body based on the body&#39;s shape variables and update the meshes</span>
@@ -1516,7 +1879,7 @@
 
         <span class="k">return</span></div>
 
-<div class="viewcode-block" id="Body.shape_derivative"><a class="viewcode-back" href="../../model.html#pyfuntofem.body.Body.shape_derivative">[docs]</a>    <span class="k">def</span> <span class="nf">shape_derivative</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">offset</span><span class="p">):</span>
+<div class="viewcode-block" id="Body.shape_derivative"><a class="viewcode-back" href="../../../model.html#pyfuntofem.model.body.Body.shape_derivative">[docs]</a>    <span class="k">def</span> <span class="nf">shape_derivative</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">,</span> <span class="n">offset</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        **[driver call]**</span>
 <span class="sd">        Calculates the shape derivative given the coordinate derivatives</span>
@@ -1659,7 +2022,7 @@
 <div id="searchbox" style="display: none" role="search">
   <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
-    <form class="search" action="../../search.html" method="get">
+    <form class="search" action="../../../search.html" method="get">
       <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
       <input type="submit" value="Go" />
     </form>
@@ -1674,11 +2037,14 @@
       <h3>Navigation</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
-          <a href="../../genindex.html" title="General Index"
+          <a href="../../../genindex.html" title="General Index"
              >index</a></li>
-        <li class="nav-item nav-item-0"><a href="../../index.html">FUNtoFEM .0 documentation</a> &#187;</li>
-          <li class="nav-item nav-item-1"><a href="../index.html" >Module code</a> &#187;</li>
-        <li class="nav-item nav-item-this"><a href="">pyfuntofem.body</a></li> 
+        <li class="right" >
+          <a href="../../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../../index.html">FUNtoFEM .0 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../../index.html" >Module code</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">pyfuntofem.model.body</a></li> 
       </ul>
     </div>
     <div class="footer" role="contentinfo">
