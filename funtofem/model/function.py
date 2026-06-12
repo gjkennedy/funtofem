@@ -301,6 +301,28 @@ class Function(object):
         )
 
     @classmethod
+    def local_ksfailure(
+        cls,
+        group_name: str,
+        comp_ids: np.ndarray,
+        ks_weight: float = 50.0,
+        safety_factor: float = 1.0,
+    ):
+        """
+        Class constructor for the KS Failure function (some local set of compIDs, not whole structure)
+        """
+
+        return cls(
+            name="ksfailure-" + group_name,
+            analysis_type="structural",
+            options={
+                "ksWeight": ks_weight,
+                "safetyFactor": safety_factor,
+                "compIDs": comp_ids,
+            },
+        )
+
+    @classmethod
     def mass(cls):
         """
         Class constructor for the Mass function

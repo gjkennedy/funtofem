@@ -157,6 +157,7 @@ class TacsSteadyInterface(SolverInterface):
         debug=False,
         struct_loads_file=None,
         tacs_panel_dimensions=None,
+        mesh_loader=None,
     ):
         """
         Initialize the TACS implementation of the SolverInterface for the FUNtoFEM
@@ -196,6 +197,11 @@ class TacsSteadyInterface(SolverInterface):
             Whether to use Aitken relaxation.
         struct_loads_file: str
             File name of the struct_loads_file to be used as a constant load to the structure.
+        tacs_panel_dimensions: ``TacsPanelDimensions`` object
+            helper class for length and width values of panels
+        mesh_loader: ``TACS pyMeshLoader`` object
+            Useful for getting component IDs of components in the structure.
+            Used to get local ksfailure.
         """
 
         self.comm = comm
@@ -221,6 +227,8 @@ class TacsSteadyInterface(SolverInterface):
         # Get the list of active design variables from the FUNtoFEM model. This
         # returns the variables in the FUNtoFEM order. By scenario/body.
         self.variables = model.get_variables()
+
+        self.mesh_loader = mesh_loader
 
         # setup forward and adjoint tolerances
         super().__init__()
@@ -458,12 +466,19 @@ class TacsSteadyInterface(SolverInterface):
                     func_list.append(None)
                     func_tag.append(0)
 
-                elif func.name.lower() == "ksfailure":
+                elif "ksfailure" in func.name.lower():
                     options = _resolve_ks_options(
                         func.options if func.options is not None else {}
                     )
 
-                    func_list.append(functions.KSFailure(self.assembler, **options))
+                    ks_func = functions.KSFailure(self.assembler, **options)
+                    if func.options is not None and "compIDs" in func.options:
+                        compIDs = func.options["compIDs"]
+                        elemIDs = self.mesh_loader.getLocalElementIDsForComps(compIDs)
+                        # Finally set the domain information
+                        ks_func.setDomain(elemIDs)
+
+                    func_list.append(ks_func)
                     func_tag.append(1)
 
                 elif func.name.lower() == "compliance":
@@ -647,6 +662,7 @@ class TacsSteadyInterface(SolverInterface):
             for i, var in enumerate(self.struct_variables):
                 # func.set_gradient_component(var, func_grad[ifunc][i])
                 func.add_gradient_component(var, func_grad[ifunc][i])
+
         # print(f"\tdoneget function gradients start", flush=True)
 
         if self.tacs_panel_dimensions is not None:
@@ -933,6 +949,9 @@ class TacsSteadyInterface(SolverInterface):
             list of FUNtoFEM bodies
         """
 
+        # this is kind of like updateAssemblerVars
+        self.set_variables(scenario, bodies)
+
         if self.tacs_proc:
             # Initialize Aitken adjoint variables.
             if self.use_aitken:
@@ -943,6 +962,7 @@ class TacsSteadyInterface(SolverInterface):
 
             # Set the solution data for this scenario
             u = self.scenario_data[scenario].u
+            self.assembler.setBCs(u)
             self.assembler.setVariables(u)
 
             # Assemble the transpose of the Jacobian matrix for the adjoint
@@ -962,7 +982,7 @@ class TacsSteadyInterface(SolverInterface):
             # require their evaluation to store internal data before the sensitivities
             # can be computed.
             func_list = self.scenario_data[scenario].func_list
-            self.assembler.evalFunctions(func_list)
+            feval = self.assembler.evalFunctions(func_list)
 
             # Zero the vectors in the sensitivity list
             dfdu = self.scenario_data[scenario].dfdu
@@ -1164,8 +1184,6 @@ class TacsSteadyInterface(SolverInterface):
                         struct_flux_ajp[:, ifunc] = -psi_array[
                             self.thermal_index :: ndof
                         ].astype(body.dtype)
-
-        # print(f"done with iterate adjoint", flush=True)
 
         return fail
 
@@ -1495,6 +1513,7 @@ class TacsSteadyInterface(SolverInterface):
 
         # get struct ids for coordinate derivatives and .sens file
         struct_id = None
+        mesh_loader = None
         if assembler is not None:
             # get list of local node IDs with global size, with -1 for nodes not owned by this proc
             num_nodes = fea_assembler.meshLoader.bdfInfo.nnodes
@@ -1502,6 +1521,8 @@ class TacsSteadyInterface(SolverInterface):
             local_tacs_ids = fea_assembler.meshLoader.getLocalNodeIDsFromGlobal(
                 bdfNodes, nastranOrdering=False
             )
+
+            mesh_loader = fea_assembler.meshLoader
 
             """
             the local_tacs_ids list maps nastran nodes to tacs indices with:
@@ -1561,6 +1582,7 @@ class TacsSteadyInterface(SolverInterface):
             relaxation_scheme=relaxation_scheme,
             struct_loads_file=struct_loads_file,
             tacs_panel_dimensions=tacs_panel_dimensions,
+            mesh_loader=mesh_loader,
         )
 
     @classmethod

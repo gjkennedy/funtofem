@@ -157,6 +157,21 @@ class FUNtoFEMnlbgs(FUNtoFEMDriver):
                     body.transfer_disps(scenario)
                     body.transfer_temps(scenario)
 
+                    if self._debug:
+                        struct_temps = body.get_struct_temps(scenario)
+                        aero_temps = body.get_aero_temps(scenario)
+                        print(f"========================================")
+                        print(f"Inside nlbgs driver, step: {step}")
+                        if aero_temps is not None:
+                            print(
+                                f"norm of aero_temps on rank {self.comm.rank}: {real_norm(aero_temps)}"
+                            )
+                        if struct_temps is not None:
+                            print(
+                                f"norm of struct_temps on rank {self.comm.rank}: {real_norm(struct_temps)}"
+                            )
+                        print(f"========================================\n", flush=True)
+
                 # Take a step in the flow solver
                 fail = self.solvers.flow.iterate(scenario, self.model.bodies, step)
 
@@ -178,16 +193,24 @@ class FUNtoFEMnlbgs(FUNtoFEMDriver):
                         print(f"Inside nlbgs driver, step: {step}")
                         if struct_loads is not None:
                             print(
-                                f"norm of real struct_loads: {real_norm(struct_loads)}"
+                                f"norm of struct_loads on rank {self.comm.rank}: {real_norm(struct_loads)}"
                             )
-                            print(
-                                f"norm of imaginary struct_loads: {imag_norm(struct_loads)}"
-                            )
-                        print(f"aero_loads: {aero_loads}")
+                        # print(f"aero_loads: {aero_loads}")
                         if aero_loads is not None:
-                            print(f"norm of real aero_loads: {real_norm(aero_loads)}")
                             print(
-                                f"norm of imaginary aero_loads: {imag_norm(aero_loads)}"
+                                f"norm of aero_loads on rank {self.comm.rank}: {real_norm(aero_loads)}"
+                            )
+                        print(f"========================================\n", flush=True)
+
+                        struct_flux = body.get_struct_heat_flux(scenario)
+                        aero_flux = body.get_aero_heat_flux(scenario)
+                        if struct_loads is not None:
+                            print(
+                                f"norm of struct_heat_flux on rank {self.comm.rank}: {real_norm(struct_flux)}"
+                            )
+                        if aero_loads is not None:
+                            print(
+                                f"norm of aero_heat_flux on rank {self.comm.rank}: {real_norm(aero_flux)}"
                             )
                         print(f"========================================\n", flush=True)
 
@@ -204,7 +227,7 @@ class FUNtoFEMnlbgs(FUNtoFEMDriver):
 
                 # Under-relaxation for solver stability
                 for body in self.model.bodies:
-                    body.aitken_relax(self.comm, scenario)
+                    body.aitken_relax(self.comm, scenario, first_iteration=step == 1)
 
                 # check for early stopping criterion, exit if meets criterion
                 exit_early = False
@@ -227,6 +250,12 @@ class FUNtoFEMnlbgs(FUNtoFEMDriver):
                             if forward_resid > forward_tol:
                                 all_converged = False
                                 break
+
+                    # also coupled disp change step check
+                    for body in self.model.bodies:
+                        small_disp_change = body.check_small_disp_change(scenario)
+                        if not small_disp_change:
+                            all_converged = False
 
                     if all_converged:
                         exit_early = True
@@ -309,7 +338,9 @@ class FUNtoFEMnlbgs(FUNtoFEMDriver):
                     return fail
 
                 for body in self.model.bodies:
-                    body.aitken_adjoint_relax(self.comm, scenario)
+                    body.aitken_adjoint_relax(
+                        self.comm, scenario, first_iteration=step == start
+                    )
 
                 # check for early stopping criterion, exit if meets criterion
                 exit_early = False
@@ -330,6 +361,12 @@ class FUNtoFEMnlbgs(FUNtoFEMDriver):
                             )
 
                         if adjoint_resid > adjoint_tol:
+                            all_converged = False
+
+                    # also coupled disp change step check
+                    for body in self.model.bodies:
+                        small_adj_change = body.check_small_adj_change(scenario)
+                        if not small_adj_change:
                             all_converged = False
 
                     if all_converged:

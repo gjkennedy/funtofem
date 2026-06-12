@@ -67,6 +67,10 @@ class Fun3dBC:
     def SymmetryZ(cls, caps_group):
         return cls(caps_group, bc_type="SymmetryZ", symmetryPlane=3)
 
+    @classmethod
+    def Generic(cls, caps_group: str, bc_type: str):
+        return cls(caps_group, bc_type=bc_type)
+
     @property
     def BC_dict(self) -> dict:
         if self.wall_spacing is None:
@@ -175,6 +179,11 @@ class Fun3dAim:
     def set_config_parameter(self, param_name: str, value: float):
         if self.root_proc:
             self.geometry.cfgpmtr[param_name].value = value
+        return
+
+    def set_design_parameter(self, param_name: str, value: float):
+        if self.root_proc:
+            self.geometry.despmtr[param_name].value = value
         return
 
     def get_config_parameter(self, param_name: str):

@@ -53,6 +53,7 @@ class Scenario(Base):
         fun3d=True,
         steps=1000,
         uncoupled_steps=0,
+        coupled=True,
         adjoint_steps=None,
         min_forward_steps=50,
         min_adjoint_steps=None,
@@ -93,6 +94,11 @@ class Scenario(Base):
             the number of outer coupling steps in the scenario
         uncoupled_steps: int
             the number of fun3d iterations ran before coupled iterations
+        coupled: bool
+            Whether this scenario is a fully coupled aerostructural scenario (default True). Set to False
+            for uncoupled scenarios, e.g., when using OnewayStructDriver with pre-computed aerodynamic
+            loads. Uncoupled scenarios skip the fluid-structure coupling loop and are used by OnewayStructTrimDriver
+            to identify which scenarios to apply AOA load scaling to.
         adjoint_steps: int
             optional number of adjoint steps when using FUN3D analysis, can have different
             number of forward and adjoint steps in steady-state
@@ -153,7 +159,8 @@ class Scenario(Base):
         self._adjoint_steps = adjoint_steps
         self.variables = {}
 
-        self.functions: list[Function | CompositeFunction] = []
+        self.functions = []
+        self.coupled = coupled
         self.steady = steady
         self.steps = steps
         self.forward_coupling_frequency = forward_coupling_frequency
@@ -177,6 +184,9 @@ class Scenario(Base):
         self.gamma = gamma
         self.R_specific = R_specific
         self.Pr = Pr
+
+        self.coupled_fw_rtol = 1e-6
+        self.coupled_adj_rtol = 1e-6
 
         # early stopping criterion
         self.min_forward_steps = (
@@ -213,6 +223,7 @@ class Scenario(Base):
         cls,
         name: str,
         steps: int,
+        coupled: bool = True,
         uncoupled_steps: int = 0,
         forward_coupling_frequency: int = 1,
         adjoint_coupling_frequency: int = 1,
@@ -224,6 +235,7 @@ class Scenario(Base):
             name=name,
             steady=True,
             steps=steps,
+            coupled=coupled,
             forward_coupling_frequency=forward_coupling_frequency,
             adjoint_steps=adjoint_steps,
             adjoint_coupling_frequency=adjoint_coupling_frequency,
@@ -237,6 +249,7 @@ class Scenario(Base):
         cls,
         name: str,
         steps: int,
+        coupled: bool = True,
         uncoupled_steps: int = 0,
         tacs_integration_settings=None,
     ):
@@ -244,6 +257,7 @@ class Scenario(Base):
             name=name,
             steady=False,
             steps=steps,
+            coupled=coupled,
             tacs_integration_settings=tacs_integration_settings,
             uncoupled_steps=uncoupled_steps,
         )
@@ -400,6 +414,8 @@ class Scenario(Base):
     def set_stop_criterion(
         self,
         early_stopping: bool = True,
+        coupled_fw_rtol: float = 1e-6,
+        coupled_adj_rtol: float = 1e-6,
         min_forward_steps=None,
         min_adjoint_steps=None,
         post_tight_forward_steps=None,
@@ -426,6 +442,8 @@ class Scenario(Base):
             (optional) number of additional tightly coupled adjoint steps at the end of the solve
         """
         self.early_stopping = early_stopping
+        self.coupled_fw_rtol = coupled_fw_rtol
+        self.coupled_adj_rtol = coupled_adj_rtol
         if min_forward_steps is not None:
             self.min_forward_steps = min_forward_steps
         if min_adjoint_steps is not None:
