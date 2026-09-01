@@ -39,10 +39,26 @@ if TYPE_CHECKING:
     from .composite_function import CompositeFunction
 
 
+def _on_root_proc() -> bool:
+    """whether this is the root proc, so status messages only print once under MPI"""
+    try:
+        from mpi4py import MPI
+
+        return MPI.COMM_WORLD.rank == 0
+    except ImportError:  # pragma: no cover - funtofem normally requires mpi4py
+        return True
+
+
 class Scenario(Base):
     """A class to hold scenario information for a design point in optimization"""
 
     UNCOUPLED_STEP_BUFFER = 10
+
+    # Automatically reorder function list on add_function so that all functions that require
+    # an adjoint come first (also, when early stopping is active, an aerodynamic function
+    # comes first). False: hard error when functions are registered out of order.
+    # See _canonicalize_functions.
+    AUTO_REORDER_FUNCTIONS = True
 
     def __init__(
         self,
@@ -75,6 +91,10 @@ class Scenario(Base):
         gamma=1.4,
         R_specific=287.058,
         Pr=0.72,
+        Mach_inf=None,
+        turbulent=True,
+        k_fixed=None,
+        T_fixed=None,
     ):
         """
         Parameters
@@ -145,6 +165,22 @@ class Scenario(Base):
             Specific gas constant of the working fluid (assumed air). Units of J/kg-K
         Pr: double
             Prandtl number.
+        Mach_inf: float or None
+            Freestream Mach number. Selects the ``"eckert"`` conductivity-evaluation
+            strategy. Ignored when ``k_fixed`` or ``T_fixed`` is also supplied.
+        turbulent: bool
+            Recovery factor in the Eckert adiabatic-wall temperature: True (default)
+            uses r = Pr^(1/3), False uses r = sqrt(Pr). Only used by ``"eckert"``.
+        k_fixed: float or None
+            Constant thermal conductivity (W/m-K). Selects the ``"fixed"`` strategy and
+            takes precedence over ``Mach_inf`` and ``T_fixed``.
+        T_fixed: float or None
+            Reference temperature (K) at which Sutherland's law is evaluated once to
+            produce a constant k for the ``"fixed"`` strategy. Ignored when ``k_fixed``
+            is also supplied.
+
+        See ``set_conductivity_info`` for the full description of the strategies.
+
         See Also
         --------
         :mod:`base` : Scenario inherits from Base
@@ -160,6 +196,9 @@ class Scenario(Base):
         self.variables = {}
 
         self.functions = []
+        # whether the function list has already been reordered once (so the
+        # notice about it is only printed once per scenario)
+        self._reordered = False
         self.coupled = coupled
         self.steady = steady
         self.steps = steps
@@ -185,6 +224,14 @@ class Scenario(Base):
         self.R_specific = R_specific
         self.Pr = Pr
 
+        # Heat capacity at constant pressure — must be set before set_conductivity_info,
+        # which may call _sutherland_k (used when T_fixed is supplied).
+        self.cp = self.R_specific * self.gamma / (self.gamma - 1)
+
+        self.set_conductivity_info(
+            Mach_inf=Mach_inf, turbulent=turbulent, k_fixed=k_fixed, T_fixed=T_fixed
+        )
+
         self.coupled_fw_rtol = 1e-6
         self.coupled_adj_rtol = 1e-6
 
@@ -198,10 +245,6 @@ class Scenario(Base):
             min_adjoint_steps if min_adjoint_steps is not None else 0
         )
         self.early_stopping = early_stopping
-
-        # Heat capacity at constant pressure
-        cp = self.R_specific * self.gamma / (self.gamma - 1)
-        self.cp = cp
 
         if fun3d:
             mach = Variable("Mach", id=1, upper=5.0, active=False)
@@ -280,9 +323,87 @@ class Scenario(Base):
         assert self.steady
         self._adjoint_steps = new_steps
 
-    def add_function(self, function: Function | CompositeFunction):
+    @property
+    def early_stopping(self) -> bool:
+        return self._early_stopping
+
+    @early_stopping.setter
+    def early_stopping(self, value: bool):
+        self._early_stopping = value
+        # the required function ordering depends on this setting, and it may be
+        # changed after functions have already been registered
+        self._canonicalize_functions()
+
+    def _canonicalize_functions(self):
+        """
+        Reorder `self.functions` in place into the canonical order the rest of the
+        framework assumes, and renumber the function ids to match.
+
+        Two orderings are required downstream:
+
+        1. All functions requiring an adjoint must come first. The adjoint-Jacobian
+           product arrays in Body are sized with `count_adjoint_functions()` while much
+           of the driver and interface code indexes them with the full function index,
+           so the two index spaces must coincide. Critically, `function.id` is the
+           1-based full-list index and is pushed straight into FUN3D's Fortran design
+           interface, which was sized with `count_adjoint_functions()` -- getting this
+           wrong is an out-of-bounds write into compiled code, not a Python error.
+
+        2. When the early stopping criterion is on, an aerodynamic function must come
+           first, otherwise FUN3D's adjoint early stopping criterion fails (see
+           `Fun3d14Interface.set_functions`).
+
+        The sort is stable, so the order in which the user registered functions is
+        preserved within each group. `add_function` keeps the list canonical as it goes
+        and only calls this when an append would actually break the invariant.
+        """
+        old_order = list(self.functions)
+        out_of_order = False
+
+        if self.AUTO_REORDER_FUNCTIONS:
+            # adjoint functions first
+            self.functions.sort(key=lambda func: not func.adjoint)
+
+            # whether that sort alone moved anything, i.e. whether the functions really
+            # were registered out of order. The aero promotion below is not a
+            # registration mistake, so the notice must tell the two apart
+            out_of_order = self.functions != old_order
+
+            # then, if early stopping is on, move the first aerodynamic function to the
+            # front of the adjoint group, which the sort above put at index 0
+            if self.early_stopping:
+                for ifunc, func in enumerate(self.functions):
+                    if func.adjoint and func.analysis_type == "aerodynamic":
+                        if ifunc > 0:
+                            self.functions.insert(0, self.functions.pop(ifunc))
+                        break
+
+        # renumber so function.id stays the 1-based index into self.functions
+        for ifunc, func in enumerate(self.functions):
+            func.id = ifunc + 1
+
+        if self.functions != old_order and not self._reordered:
+            self._reordered = True
+            if _on_root_proc():
+                if out_of_order:
+                    reason = "functions were registered out of order; adjoint functions moved first"
+                else:
+                    reason = "an aerodynamic function moved first, as early stopping requires"
+                print(
+                    f"FUNtoFEM scenario '{self.name}': {reason}. "
+                    "See scenario.print_summary() for the order that will be used.",
+                    flush=True,
+                )
+        return
+
+    def add_function(self, function: Function):
         """
         Add a new function to the scenario's function list
+
+        Functions may be registered in any order; the list is reordered internally so
+        that all functions requiring an adjoint come first (see
+        `_canonicalize_functions`). Set `Scenario.AUTO_REORDER_FUNCTIONS = False` to
+        get a hard error on out-of-order registration instead.
 
         Parameters
         ----------
@@ -290,20 +411,60 @@ class Scenario(Base):
             function object to be added to scenario
         """
 
-        function.id = len(self.functions) + 1
+        if not isinstance(function, Function):
+            raise TypeError(
+                f"FUNtoFEM scenario '{self.name}': add_function expects a Function, got "
+                f"{type(function).__name__}. Composite functions are registered to the "
+                "model rather than to a scenario, via "
+                "CompositeFunction.register_to(model)."
+            )
+
+        if not self.AUTO_REORDER_FUNCTIONS and function.adjoint:
+            blockers = [
+                (ifunc, func)
+                for ifunc, func in enumerate(self.functions)
+                if not func.adjoint
+            ]
+            if blockers:
+                ifunc, blocker = blockers[0]
+                listing = "\n".join(
+                    f"    [{jfunc}] {func.name:<16} adjoint={func.adjoint}"
+                    for jfunc, func in enumerate(self.functions)
+                )
+                raise RuntimeError(
+                    f"FUNtoFEM: cannot register adjoint function '{function.name}' to "
+                    f"scenario '{self.name}' after non-adjoint function "
+                    f"'{blocker.name}' (index {ifunc}). All functions requiring an "
+                    "adjoint must be registered first.\n\n"
+                    f"  Current order in scenario '{self.name}':\n"
+                    f"{listing}\n"
+                    f"    [{len(self.functions)}] {function.name:<16} "
+                    f"adjoint={function.adjoint}   <-- rejected\n\n"
+                    f"  Fix: register '{blocker.name}' last, or leave "
+                    "Scenario.AUTO_REORDER_FUNCTIONS = True (the default) to have "
+                    "FUNtoFEM reorder them automatically."
+                )
+
         function.scenario = self.id
         function._scenario_name = self.name
 
-        if function.adjoint:
-            for func in self.functions:
-                if not func.adjoint:
-                    print("Cannot add an adjoint function after a non-adjoint.")
-                    print(
-                        "Please reorder the functions so that all functions requiring an adjoint come first"
-                    )
-                    exit()
-
+        # self.functions is canonical before every add (this method maintains that
+        # invariant): a non-adjoint function always belongs at the end, and an
+        # adjoint function belongs at the end only if nothing non-adjoint is there
+        # yet -- which is true exactly when the current last function is adjoint.
+        # Early stopping additionally wants an aerodynamic function promoted to the
+        # front, which is not a local decision, so fall through in that case.
+        previous_last = self.functions[-1] if self.functions else None
         self.functions.append(function)
+
+        stays_canonical = not self.early_stopping and (
+            not function.adjoint or previous_last is None or previous_last.adjoint
+        )
+        if stays_canonical:
+            function.id = len(self.functions)
+        else:
+            self._canonicalize_functions()
+
         # return the object for method cascading
         return self
 
@@ -325,8 +486,13 @@ class Scenario(Base):
 
     @property
     def reverse_adjoint_map(self) -> dict:
-        """return an int map from full function index to adjoint function index"""
-        return {key: self.adjoint_map[key] for key in self.adjoint_map}
+        """
+        return an int map from full function index to adjoint function index
+
+        Only adjoint functions appear as keys, so callers iterating the full function
+        list should skip indices that are absent.
+        """
+        return {ifunc: iadj for iadj, ifunc in self.adjoint_map.items()}
 
     def count_functions(self):
         """
@@ -409,6 +575,108 @@ class Scenario(Base):
         """
         self.T_ref = T_ref
         self.T_inf = T_inf
+        return self
+
+    def set_conductivity_info(
+        self,
+        Mach_inf: float = None,
+        turbulent: bool = None,
+        k_fixed: float = None,
+        T_fixed: float = None,
+    ):
+        """
+        Set the thermal-conductivity evaluation strategy for aerothermal coupling.
+
+        Cascade-friendly alternative to passing ``Mach_inf``, ``turbulent``,
+        ``k_fixed``, or ``T_fixed`` to ``__init__``.  Calling it overwrites any
+        strategy previously set on this scenario.  The strategy is picked by which
+        argument is supplied, in precedence order:
+
+        * ``k_fixed``  → ``"fixed"``: k held at the given constant (W/m-K).
+        * ``T_fixed``  → ``"fixed"``: k evaluated once from Sutherland's law at the
+          given reference temperature, then held constant.
+        * ``Mach_inf`` → ``"eckert"`` (experimental): k evaluated at the Eckert
+          reference temperature, a high-speed refinement of the film temperature.
+        * none of these → ``"wall"`` (default): k evaluated at the current wall
+          temperature T_w, the physical evaluation.
+
+        This is primarily an accuracy choice, not a stability one.  The coupling runs
+        only a few CFD sub-iterations per coupled step, far short of the flow solver's
+        thermal settling time, so the exchange sits in a partially-frozen regime where
+        its fixed-point eigenvalue is near unity and the conductivity strategy shifts
+        it only slightly.  Aitken relaxation of the interface, not the choice of
+        strategy, is what stabilizes the coupling in practice.  See the aerothermal
+        coupling stability section of B. Burke's dissertation for the analysis.
+
+        Parameters
+        ----------
+        Mach_inf : float or None
+            Freestream Mach number.  Required for the ``"eckert"`` strategy.
+        turbulent : bool or None
+            Recovery factor in the Eckert adiabatic-wall temperature: ``True``
+            (default) uses r = Pr^(1/3), ``False`` uses r = sqrt(Pr).  Only used
+            by ``"eckert"``.  This is a modifier rather than a strategy selector,
+            so supplying it on its own updates the recovery factor and leaves the
+            strategy already set on this scenario in place.
+        k_fixed : float or None
+            Constant thermal conductivity (W/m-K) for the ``"fixed"`` strategy.
+        T_fixed : float or None
+            Reference temperature (K) at which Sutherland's law is evaluated once to
+            produce a constant k.  Ignored when ``k_fixed`` is also supplied.
+
+        Returns
+        -------
+        self : Scenario
+            Returns the scenario itself to support method cascading.
+
+        Examples
+        --------
+        ::
+
+            scenario.set_conductivity_info(Mach_inf=6.47)   # eckert
+            scenario.set_conductivity_info(k_fixed=0.05)    # fixed, explicit k
+            scenario.set_conductivity_info(T_fixed=241.5)   # fixed, k from Sutherland
+
+        See Also
+        --------
+        get_thermal_conduct, get_thermal_conduct_deriv
+        """
+        no_strategy_given = k_fixed is None and T_fixed is None and Mach_inf is None
+        if (
+            turbulent is not None
+            and no_strategy_given
+            and getattr(self, "k_eval_strategy", None) is not None
+        ):
+            # turbulent only modifies the Eckert recovery factor, it does not select
+            # a strategy - supplying it alone should not silently reset one set earlier
+            self.turbulent = bool(turbulent)
+            return self
+
+        turbulent = True if turbulent is None else bool(turbulent)
+
+        if k_fixed is not None:
+            # Explicit k value takes precedence over everything.
+            self.k_eval_strategy = "fixed"
+            self.k_fixed = float(k_fixed)
+            self.Mach_inf = None
+            self.turbulent = turbulent
+        elif T_fixed is not None:
+            # Derive k once from Sutherland's law at the given reference temperature.
+            self.k_eval_strategy = "fixed"
+            self.k_fixed = float(self._sutherland_k(float(T_fixed)))
+            self.Mach_inf = None
+            self.turbulent = turbulent
+        elif Mach_inf is not None:
+            self.k_eval_strategy = "eckert"
+            self.k_fixed = None
+            self.Mach_inf = float(Mach_inf)
+            self.turbulent = bool(turbulent)
+        else:
+            self.k_eval_strategy = "wall"
+            self.k_fixed = None
+            self.Mach_inf = None
+            self.turbulent = turbulent
+
         return self
 
     def set_stop_criterion(
@@ -500,57 +768,139 @@ class Scenario(Base):
         for func in self.functions:
             func.scenario = id
 
+    def _sutherland_k(self, T):
+        """
+        Evaluate dimensional thermal conductivity via Sutherland's two-constant viscosity
+        law at temperature T (K), using constant Prandtl number and cp.
+
+        Parameters
+        ----------
+        T : float or np.ndarray
+            Temperature(s) at which to evaluate conductivity.  Values are
+            floored at 1 K before evaluation so that unphysical negative
+            temperatures (which can appear during a diverging coupled
+            iteration) produce a finite, positive result rather than nan.
+
+        Returns
+        -------
+        k : same type/shape as T
+            Dimensional thermal conductivity (W/m-K).
+        """
+        T_safe = np.maximum(T, 1.0)
+        mu = self.suther1 * T_safe ** (3.0 / 2.0) / (T_safe + self.suther2)
+        return mu * self.cp / self.Pr
+
+    def _sutherland_k_deriv(self, T):
+        """
+        Evaluate dk/dT via Sutherland's law at temperature T (K).
+
+        Parameters
+        ----------
+        T : float or np.ndarray
+            Temperature(s) at which to evaluate the derivative.  Values are
+            floored at 1 K consistent with ``_sutherland_k``.
+
+        Returns
+        -------
+        dkdT : same type/shape as T
+            Derivative of dimensional thermal conductivity with respect to T (W/m-K^2).
+        """
+        T_safe = np.maximum(T, 1.0)
+        s2 = self.suther2
+        dmu_dT = (
+            self.suther1
+            * T_safe ** (0.5)
+            * (3.0 * s2 + T_safe)
+            / (2.0 * (s2 + T_safe) ** 2)
+        )
+        # zero out the clamped region so the derivative matches _sutherland_k, which
+        # is constant there -- otherwise the adjoint picks up a spurious dk/dT
+        return dmu_dT * self.cp / self.Pr * (np.real(T) >= 1.0)
+
+    def _eckert_T_star(self, aero_temps):
+        """
+        Compute the Eckert reference temperature T* (K) at each aero surface node,
+
+            T* = 0.5*(T_w + T_inf) + 0.22*(T_aw - T_inf),
+
+        with adiabatic-wall temperature T_aw = T_inf*(1 + r*(gamma-1)/2*Mach_inf^2)
+        and recovery factor r = Pr^(1/3) (turbulent) or Pr^(1/2) (laminar).
+
+        Parameters
+        ----------
+        aero_temps : np.ndarray
+            Current wall temperatures at each aero surface node (K).
+
+        Returns
+        -------
+        T_star : np.ndarray
+            Eckert reference temperature at each node (K).
+        """
+        r = self.Pr ** (1.0 / 3.0) if self.turbulent else self.Pr ** (0.5)
+        T_aw = self.T_inf * (1.0 + r * (self.gamma - 1.0) / 2.0 * self.Mach_inf**2)
+        T_star = 0.5 * (aero_temps + self.T_inf) + 0.22 * (T_aw - self.T_inf)
+        return T_star
+
     def get_thermal_conduct(self, aero_temps):
         """
         Calculate dimensional thermal conductivity at each aero surface node.
-        First, use two-constant Sutherland's law to calculate viscosity for use in calculating aero heat flux.
+
+        Dispatches on ``k_eval_strategy`` (see ``set_conductivity_info``):
+
+        * ``"wall"`` (default): Sutherland's law at the current wall temperature.
+        * ``"eckert"``: Sutherland's law at the Eckert reference temperature T*.
+        * ``"fixed"``: the constant ``k_fixed``, broadcast over ``aero_temps``.
 
         Parameters
         ----------
-        aero_temps: np.ndarray
-            Current aero surface temperatures.
+        aero_temps : np.ndarray
+            Current aero surface temperatures (K).
+
+        Returns
+        -------
+        k : np.ndarray
+            Dimensional thermal conductivity at each node (W/m-K).
         """
+        if self.k_eval_strategy == "fixed":
+            return np.full_like(aero_temps, self.k_fixed)
 
-        # Gas constants
-        s1 = self.suther1
-        s2 = self.suther2
-        cp = self.cp
-        Pr = self.Pr
+        if self.k_eval_strategy == "eckert":
+            T_star = self._eckert_T_star(aero_temps)
+            return self._sutherland_k(T_star)
 
-        # Compute viscosity at each aero surface node
-        mu = s1 * aero_temps ** (3.0 / 2.0) / (aero_temps + s2)
-        # Compute the dimensional thermal conductivity
-        k = mu * cp / Pr
-
-        return k
+        # "wall" strategy — default, k evaluated at the current wall temperature
+        return self._sutherland_k(aero_temps)
 
     def get_thermal_conduct_deriv(self, aero_temps):
         """
-        Calculate derivative of thermal conductivity with respect to aero surface temperature.
+        Calculate dk/dT_wall at each aero surface node, consistent with the active
+        ``k_eval_strategy``.
+
+        * ``"wall"``: ``dk/dT_w`` directly from Sutherland's law.
+        * ``"eckert"``: chain rule through T*, where dT*/dT_w = 0.5.
+        * ``"fixed"``: zeros, since k does not depend on the wall temperature.
 
         Parameters
         ----------
-        aero_temps: np.ndarray
-            Current aero surface temperatures.
+        aero_temps : np.ndarray
+            Current aero surface temperatures (K).
+
+        Returns
+        -------
+        dkdtA : np.ndarray
+            Derivative of dimensional thermal conductivity with respect to wall
+            temperature at each node (W/m-K^2).
         """
+        if self.k_eval_strategy == "fixed":
+            return np.zeros_like(aero_temps)
 
-        # Gas constants
-        s1 = self.suther1
-        s2 = self.suther2
-        cp = self.cp
-        Pr = self.Pr
+        if self.k_eval_strategy == "eckert":
+            T_star = self._eckert_T_star(aero_temps)
+            # chain rule: dk/dT_w = dk/dT* * dT*/dT_w,  dT*/dT_w = 0.5
+            return self._sutherland_k_deriv(T_star) * 0.5
 
-        # Compute viscosity at each aero surface node
-        dmu_dtA = (
-            s1
-            * aero_temps ** (0.5)
-            * (3 * s2 + aero_temps)
-            / (2 * (s2 + aero_temps) ** 2)
-        )
-        # Compute the dimensional thermal conductivity
-        dkdtA = dmu_dtA * cp / Pr
-
-        return dkdtA
+        # "wall" strategy (default) — direct Sutherland derivative
+        return self._sutherland_k_deriv(aero_temps)
 
     def __str__(self):
         line1 = f"Scenario (<ID> <Name>): {self.id} {self.name}"
@@ -659,6 +1009,12 @@ class Scenario(Base):
         p(f"  Sutherland C1            : {self.suther1} kg/m-s-K^0.5")
         p(f"  Sutherland C2            : {self.suther2} K")
         p(f"  cp                       : {self.cp:.6g} J/kg-K")
+        p(f"  k_eval_strategy          : {self.k_eval_strategy}")
+        if self.k_eval_strategy == "eckert":
+            p(f"  Mach_inf                 : {self.Mach_inf}")
+            p(f"  turbulent recovery factor: {self.turbulent}")
+        elif self.k_eval_strategy == "fixed":
+            p(f"  k_fixed                  : {self.k_fixed} W/m-K")
 
         # --- Functions ---
         p("")

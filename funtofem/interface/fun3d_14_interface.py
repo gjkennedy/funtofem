@@ -67,6 +67,8 @@ class Fun3d14Interface(SolverInterface):
         forward_stop_tolerance=1e-9,
         adjoint_min_tolerance=1e-6,
         adjoint_stop_tolerance=1e-8,
+        aerothermal_monitor=None,
+        aeroelastic_monitor=None,
     ):
         """
         The instantiation of the FUN3D interface class will populate the model with the aerodynamic surface
@@ -95,6 +97,10 @@ class Fun3d14Interface(SolverInterface):
             whether to print debug statements or not such as the real/imag norms of state vectors in FUN3D
         external_mesh_morph: bool
             override for AFRL to set mesh morph through constructor instead of caps2fun
+        aerothermal_monitor : :class:`~funtofem.interface.utils.AerothermalCouplingMonitor`, optional
+            Records per-step wall temperature, conductivity, and heat flux statistics.
+        aeroelastic_monitor : :class:`~funtofem.interface.utils.AeroelasticCouplingMonitor`, optional
+            Records per-step aero surface displacement and load statistics.
         """
 
         self.comm = comm
@@ -124,6 +130,12 @@ class Fun3d14Interface(SolverInterface):
         # heat flux
         self.thermal_scale = 1.0  # = 1/2 * rho_inf * (V_inf)^3
         self.dHdq = []
+
+        # optional per-step aerothermal diagnostics
+        self.aerothermal_monitor = aerothermal_monitor
+
+        # optional per-step aeroelastic diagnostics
+        self.aeroelastic_monitor = aeroelastic_monitor
 
         # fun3d residual data
         self._forward_done = False
@@ -344,9 +356,13 @@ class Fun3d14Interface(SolverInterface):
             list of FUNtoFEM bodies
         """
 
-        # check if any aerodynamic functions
+        # check if any aerodynamic functions require an adjoint. Only these can be
+        # made to come first, so this must match the promotion condition in
+        # Scenario._canonicalize_functions: a non-adjoint aerodynamic function is
+        # never pushed here and cannot satisfy the early stopping criterion.
+        # Note: I don't know of any aero functions that don't require an adjoint.
         any_aerodynamic = any(
-            [func.analysis_type == "aerodynamic" for func in scenario.functions]
+            [func.analysis_type == "aerodynamic" for func in scenario.adjoint_functions]
         )
 
         ct = 0
@@ -358,8 +374,19 @@ class Fun3d14Interface(SolverInterface):
                 stop = 1
 
                 if ct == 1 and scenario.early_stopping and any_aerodynamic:
-                    raise AssertionError(
-                        "Need to register an aerodynamic function first otherwise the Adjoint early stopping criterion fails"
+                    # Scenario._canonicalize_functions normally promotes an
+                    # aerodynamic function to the front, so this is only reachable
+                    # if that reordering was disabled.
+                    raise RuntimeError(
+                        f"FUNtoFEM scenario '{scenario.name}': the first function "
+                        f"requiring an adjoint is '{function.name}' "
+                        f"(analysis_type='{function.analysis_type}'), but the early "
+                        "stopping criterion requires an aerodynamic function to come "
+                        "first, otherwise the FUN3D adjoint early stopping criterion "
+                        "fails. Register an aerodynamic function first, set "
+                        "Scenario.AUTO_REORDER_FUNCTIONS = True to have FUNtoFEM do it "
+                        "for you, or turn off early stopping via "
+                        "scenario.set_stop_criterion(early_stopping=False)."
                     )
             else:
                 start = 1 if function.start is None else function.start
@@ -689,11 +716,18 @@ class Fun3d14Interface(SolverInterface):
                     print(f"norm of imaginary aero_loads: {imag_norm(aero_loads)}")
                 print(f"========================================\n", flush=True)
 
-            # Compute the heat flux on the body
-            # FUN3D is nondimensional, it doesn't output a heat flux (which can't be scaled linearly).
-            # Instead, FUN3D can directly output a temperature gradient at the wall. We then compute
-            # the heat flux manually by calculating viscosity based on aero temps to get thermal conductivity,
-            # and then take the product of thermal conductivity and area-weighted temperature gradient.
+            # record() uses allreduce — must be called unconditionally so that
+            # ranks with no aero nodes still participate in the collective.
+            if self.aeroelastic_monitor is not None:
+                aero_disps = body.get_aero_disps(scenario, time_index=step)
+                self.aeroelastic_monitor.record(step, aero_disps, aero_loads)
+
+            # Compute the heat flux on the body.
+            # FUN3D outputs an area-weighted, non-dimensional wall temperature gradient
+            # (cqa) rather than a heat flux, so form the heating rate from Fourier's law:
+            #   heat_flux = dTdn_dim * k_dim,   dTdn_dim = cqa * T_inf
+            # where k_dim comes from scenario.get_thermal_conduct(), which evaluates the
+            # gas conductivity at the wall temperature by default.
             heat_flux = body.get_aero_heat_flux(scenario, time_index=step)
 
             if heat_flux is not None and aero_nnodes > 0:
@@ -707,6 +741,16 @@ class Fun3d14Interface(SolverInterface):
 
                 # actually a heating rate integral(heat_flux) over the area
                 heat_flux[:] = dTdn_dim[:] * k_dim[:]
+            else:
+                aero_temps = None
+                k_dim = None
+
+            # record() uses allreduce across all ranks — must be called
+            # unconditionally so that ranks with no aero nodes participate.
+            if self.aerothermal_monitor is not None:
+                self.aerothermal_monitor.record(
+                    step, aero_temps, k_dim, heat_flux, body=body
+                )
 
         return 0
 

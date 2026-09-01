@@ -42,6 +42,12 @@ class AitkenRelaxation:
     """
     Class to define aitken relaxation settings
     THIS is now an Aitken Acceleration method technically speaking
+
+    For aerothermal coupling this is the primary stabilizer, not just an
+    accelerator: with only a handful of CFD sub-iterations per coupled step the
+    flux-forward/temperature-back exchange is marginally stable on its own, and
+    bounding the per-exchange wall-temperature increment is what keeps it
+    converging.
     """
 
     def __init__(
@@ -50,6 +56,7 @@ class AitkenRelaxation:
         theta_therm_init=0.125,
         theta_min=0.01,
         theta_max=10.0,  # higher than 1 so it can accelerate
+        theta_increase_factor=1.5,  # max factor theta can grow per step
         debug=False,
         history_file=None,
     ):
@@ -65,11 +72,17 @@ class AitkenRelaxation:
             minimum learning rate
         theta_max : float
             maximum learning rate
+        theta_increase_factor : float
+            maximum factor by which theta may grow in a single step (1.5 = 50%).
+            Keeps Aitken from jumping to large values during the transient, where
+            the linear assumption behind the update does not yet hold. Set to None
+            to disable.
         """
         self.theta_init = theta_init
         self.theta_therm_init = theta_therm_init
         self.theta_min = theta_min
         self.theta_max = theta_max
+        self.theta_increase_factor = theta_increase_factor
         self.debug = debug
         self.history_file = history_file
         self.write_history = False
@@ -683,7 +696,10 @@ class Body(Base):
         self.aitken_is_initialized = False
         self.aitken_adj_is_initialized = False
 
-        if self.transfer is not None:
+        elastic_analyses = [_ for _ in Body.ANALYSIS_TYPES if "elastic" in _]
+        thermal_analyses = [_ for _ in Body.ANALYSIS_TYPES if "therm" in _]
+
+        if self.analysis_type in elastic_analyses:
             ns = 3 * self.struct_nnodes
             na = 3 * self.aero_nnodes
 
@@ -705,7 +721,7 @@ class Body(Base):
                     self.struct_disps[id].append(np.zeros(ns, dtype=self.dtype))
                     self.aero_disps[id].append(np.zeros(na, dtype=self.dtype))
 
-        if self.thermal_transfer is not None:
+        if self.analysis_type in thermal_analyses:
             ns = self.struct_nnodes
             na = self.aero_nnodes
 
@@ -715,7 +731,12 @@ class Body(Base):
                 self.struct_temps[scenario.id] = (
                     np.ones(ns, dtype=self.dtype) * scenario.T_ref
                 )
-                self.aero_temps[scenario.id] = np.zeros(na, dtype=self.dtype)
+                # Initialize aero_temps to T_ref. A coupled solve overwrites these
+                # via the temperature transfer, but a flow-only run (OnewayAeroDriver)
+                # never does, and zeros would give a meaningless Sutherland k.
+                self.aero_temps[scenario.id] = (
+                    np.ones(na, dtype=self.dtype) * scenario.T_ref
+                )
             else:
                 id = scenario.id
                 self.struct_heat_flux[id] = []
@@ -729,7 +750,9 @@ class Body(Base):
                     self.struct_temps[id].append(
                         np.ones(ns, dtype=self.dtype) * scenario.T_ref
                     )
-                    self.aero_temps[id].append(np.zeros(na, dtype=self.dtype))
+                    self.aero_temps[id].append(
+                        np.ones(na, dtype=self.dtype) * scenario.T_ref
+                    )
 
         return
 
@@ -880,7 +903,7 @@ class Body(Base):
         time_index: int
             The time-index for time-dependent problems
         """
-        if self.thermal_transfer is not None:
+        if self.thermal_transfer is not None or scenario.id in self.aero_temps:
             if scenario.steady:
                 return self.aero_temps[scenario.id]
             else:
@@ -899,7 +922,7 @@ class Body(Base):
         time_index: int
             The time-index for time-dependent problems
         """
-        if self.thermal_transfer is not None:
+        if self.thermal_transfer is not None or scenario.id in self.aero_heat_flux:
             if scenario.steady:
                 return self.aero_heat_flux[scenario.id]
             else:
@@ -1443,23 +1466,23 @@ class Body(Base):
             self.aitken_is_initialized = False  # reset all the states
 
         if not self.aitken_is_initialized:
+            # Pull scheme parameters first so they're available for initialization
+            self.theta_init = self.relaxation_scheme.theta_init
+            self.theta_therm_init = self.relaxation_scheme.theta_therm_init
+            self.theta_min = self.relaxation_scheme.theta_min
+            self.theta_max = self.relaxation_scheme.theta_max
+
             # Aitken data for the displacements
             self.theta = self.theta_init
             self.prev_update = np.zeros(3 * self.struct_nnodes, dtype=self.dtype)
             self.aitken_vec = np.zeros(3 * self.struct_nnodes, dtype=self.dtype)
 
-            # Aitken data for the temperatures
-            self.theta_t = self.theta_init
+            # Aitken data for the temperatures — use theta_therm_init, not theta_init
+            self.theta_t = self.theta_therm_init
             self.prev_update_t = np.zeros(self.struct_nnodes, dtype=self.dtype)
             self.aitken_vec_t = (
                 np.ones(self.struct_nnodes, dtype=self.dtype) * scenario.T_ref
             )
-
-            # Update default parameters
-            self.theta_init = self.relaxation_scheme.theta_init
-            self.theta_therm_init = self.relaxation_scheme.theta_therm_init
-            self.theta_min = self.relaxation_scheme.theta_min
-            self.theta_max = self.relaxation_scheme.theta_max
 
             self.aitken_is_initialized = True
 
@@ -1547,10 +1570,43 @@ class Body(Base):
                     # Compute the tentative theta value
                     value = (up - self.prev_update_t).dot(up)
                     value = comm.allreduce(value.real)
+                    theta_prev = float(np.real(self.theta_t))
                     self.theta_t += (1 - self.theta_t) * value / norm2
+
+                    # Cap the per-step growth of theta through the transient
+                    if self.relaxation_scheme.theta_increase_factor is not None:
+                        theta_ceil = (
+                            theta_prev * self.relaxation_scheme.theta_increase_factor
+                        )
+                        self.theta_t = np.min((self.theta_t, theta_ceil))
 
                     self.theta_t = np.max(
                         (np.min((self.theta_t, self.theta_max)), self.theta_min)
+                    )
+
+                    if self.relaxation_scheme.debug and comm.rank == 0:
+                        print(
+                            "\n------------------------------------------\n",
+                            flush=True,
+                        )
+                        print(
+                            f"Thermal coupling Aitken: theta_t={float(np.real(self.theta_t)):.4g}"
+                            f"  (min={self.theta_min:.4g}, max={self.theta_max:.4g})"
+                        )
+                        if struct_temps.size > 0:
+                            print(
+                                f"  T_struct: min={float(np.real(struct_temps.min())):.4g}"
+                                f"  max={float(np.real(struct_temps.max())):.4g} K"
+                            )
+                        print(
+                            "\n------------------------------------------",
+                            flush=True,
+                        )
+                elif self.relaxation_scheme.debug and comm.rank == 0:
+                    print(
+                        f"Thermal coupling Aitken (first iteration): "
+                        f"theta_t={float(np.real(self.theta_t)):.4g} (theta_therm_init)",
+                        flush=True,
                     )
 
                 # handle the min/max for complex step
@@ -1923,7 +1979,7 @@ class Body(Base):
             all_aero_loads = comm.gather(_loads, root=root)
         else:
             all_aero_loads = []
-        if self.thermal_transfer is not None:
+        if self.thermal_transfer is not None or scenario.id in self.aero_heat_flux:
             _hflux = (
                 self.aero_heat_flux[scenario.id]
                 if scenario.steady
