@@ -327,7 +327,7 @@ class TacsUnsteadyInterface(SolverInterface):
 
         # Set up indices for accessing the nodes, displacements and
         # temperature within the solution array
-        self.struct_interface_nodes = struct_interface_nodes
+        self.struct_interface_nodes = np.array(struct_interface_nodes, dtype=int)
         self.struct_X_indices = None
         self.struct_load_indices = None
         self.struct_thermal_indices = None
