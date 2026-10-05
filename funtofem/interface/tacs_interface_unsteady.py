@@ -167,15 +167,13 @@ class TacsUnsteadyInterface(SolverInterface):
         self.struct_transfer_nodes = struct_interface_nodes
 
         if self.assembler is not None:
-            struct_X_array = self.struct_X.getArray()
-            num_nodes = len(struct_X_array//3)
-            dof_per_node = self.assembler.getVarsPerNode()
-            
+            struct_X_array = self.struct_X.get_array()
+
             # Initialize the structural nodes in the bodies
             for body in model.bodies:
                 body.initialize_struct_nodes(
                     struct_X_array[self.struct_X_indices], struct_id=struct_id
-                 )
+                )
 
     # Allocate data for each scenario
     class ScenarioData:
@@ -325,7 +323,7 @@ class TacsUnsteadyInterface(SolverInterface):
 
         # Set up indices for accessing the nodes, displacements and
         # temperature within the solution array
-        self.struct_interface_nodes = struct_interface_nodes
+        self.struct_interface_nodes = np.array(struct_interface_nodes, dtype=int)
         self.struct_X_indices = None
         self.struct_load_indices = None
         self.struct_thermal_indices = None
@@ -366,7 +364,6 @@ class TacsUnsteadyInterface(SolverInterface):
                 self.struct_thermal_indices[:] = (
                     dof_per_node * self.struct_interface_nodes + self.thermal_index
                 )
-
 
         if self.tacs_proc:
             self._initialize_integrator(model)
@@ -617,6 +614,7 @@ class TacsUnsteadyInterface(SolverInterface):
                     ext_force_array[self.struct_load_indices] += struct_loads.astype(
                         TACS.dtype
                     )
+
                 # get and copy struct heat fluxes into ext_forces
                 struct_flux = body.get_struct_heat_flux(scenario, time_index=step)
                 if struct_flux is not None:
@@ -638,13 +636,13 @@ class TacsUnsteadyInterface(SolverInterface):
                     struct_disps[:] = states[self.struct_load_indices].astype(
                         body.dtype
                     )
-                
+
                 # copy struct temps to the body, converting from gauge to absolute temp with T_ref
                 struct_temps = body.get_struct_temps(scenario, time_index=step)
                 if struct_temps is not None:
-                    struct_temps[:] = ( 
+                    struct_temps[:] = (
                         states[self.struct_thermal_indices].astype(body.dtype)
-                        + scenario.T_ref  
+                        + scenario.T_ref
                     )
 
         return fail
