@@ -21,6 +21,8 @@ limitations under the License.
 """
 
 from __future__ import print_function
+import json
+from collections import defaultdict
 
 __all__ = [
     "TacsIntegrationSettings",
@@ -125,7 +127,8 @@ class TacsUnsteadyInterface(SolverInterface):
         nprocs=None,
         debug=False,
         struct_interface_nodes: list | None = None,
-    ):
+        ):
+
         self.comm = comm
         self.tacs_comm = tacs_comm
         self.nprocs = nprocs
@@ -146,6 +149,7 @@ class TacsUnsteadyInterface(SolverInterface):
 
         self.integration_settings = integration_settings
         self.gen_output = gen_output
+        self.results= defaultdict(dict)
 
         # override boolean to compute coordinate derivatives
         # when no shape variables present (needed for some unittests)
@@ -160,6 +164,7 @@ class TacsUnsteadyInterface(SolverInterface):
             struct_id=struct_id,
             struct_interface_nodes=struct_interface_nodes,
         )
+        self.struct_transfer_nodes = struct_interface_nodes
 
         if self.assembler is not None:
             struct_X_array = self.struct_X.get_array()
@@ -363,6 +368,7 @@ class TacsUnsteadyInterface(SolverInterface):
         if self.tacs_proc:
             self._initialize_integrator(model)
 
+
     def _allocate_functions(self, scenario):
         """
         Allocate the data required to store the function values and
@@ -543,7 +549,7 @@ class TacsUnsteadyInterface(SolverInterface):
                 struct_X = self.struct_X.getArray()
 
                 # set the structural node locations into the array
-                struct_X[:] = body.get_struct_nodes()
+                struct_X[self.struct_X_indices] = body.get_struct_nodes()
 
                 # set the structural nodes into the tacs assembler
                 self.assembler.setNodes(self.struct_X)
@@ -667,8 +673,8 @@ class TacsUnsteadyInterface(SolverInterface):
                     self.assembler.setVariables(vec)
                     # Write output .f5
                     self.gen_output(time_step)
-
         return
+
 
     def initialize_adjoint(self, scenario, bodies):
         """
@@ -1006,6 +1012,7 @@ class TacsUnsteadyInterface(SolverInterface):
         output_dir=None,
         callback=None,
         struct_options={},
+        struct_transfer_nodes_nastran = None,
         thermal_index=-1,
         debug=False,
     ):
@@ -1024,6 +1031,8 @@ class TacsUnsteadyInterface(SolverInterface):
             Path to write f5 output
         callback: function
             The element callback function for pyTACS
+        struct_transfer_nodes_nastran: list
+            List of Nastran Node ids to initialize the tranfer scheme at
         struct_options: dictionary
             The options passed to pyTACS
         """
@@ -1086,6 +1095,7 @@ class TacsUnsteadyInterface(SolverInterface):
 
         # get struct ids for coordinate derivatives and .sens file
         struct_id = None
+        local_transfer_tacs_ids = None
         if assembler is not None:
             # get list of local node IDs with global size, with -1 for nodes not owned by this proc
             num_nodes = fea_assembler.meshLoader.bdfInfo.nnodes
@@ -1093,6 +1103,10 @@ class TacsUnsteadyInterface(SolverInterface):
             local_tacs_ids = fea_assembler.meshLoader.getLocalNodeIDsFromGlobal(
                 bdfNodes, nastranOrdering=False
             )
+            if struct_transfer_nodes_nastran is not None:
+                global_transfer_tacs_ids =  fea_assembler.meshLoader.getLocalNodeIDsFromGlobal(
+                                                    struct_transfer_nodes_nastran, nastranOrdering=True)
+                local_transfer_tacs_ids = np.intersect1d(local_tacs_ids, global_transfer_tacs_ids)[1:]
 
             """
             the local_tacs_ids list maps nastran nodes to tacs indices with:
@@ -1142,4 +1156,5 @@ class TacsUnsteadyInterface(SolverInterface):
             struct_id=struct_id,
             tacs_comm=tacs_comm,
             debug=debug,
+            struct_interface_nodes = local_transfer_tacs_ids,
         )
